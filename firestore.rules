@@ -155,6 +155,20 @@ service cloud.firestore {
         && isLeagueAdmin(resource.data.leagueId);
     }
 
+    match /tournaments/{tournamentId}/teams/{teamId} {
+      allow read: if signedIn();
+
+      allow create, update, delete: if signedIn()
+        && exists(
+          /databases/$(database)/documents/tournaments/$(tournamentId)
+        )
+        && isLeagueAdmin(
+          get(
+            /databases/$(database)/documents/tournaments/$(tournamentId)
+          ).data.leagueId
+        );
+    }
+
     match /matches/{matchId} {
       allow read: if signedIn();
 
