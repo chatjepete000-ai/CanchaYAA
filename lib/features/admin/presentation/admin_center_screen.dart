@@ -29,6 +29,20 @@ class AdminCenterScreen extends StatelessWidget {
           const SizedBox(height: 20),
           if (platform) ...[
             _AdminAction(
+              icon: Icons.add_business_outlined,
+              title: 'Crear liga / organización',
+              subtitle:
+                  'Crea una organización independiente con su propio administrador, torneos y operación.',
+              onTap: () => _createLeague(context),
+            ),
+            _AdminAction(
+              icon: Icons.manage_accounts_outlined,
+              title: 'Asignar administrador de liga',
+              subtitle:
+                  'Da control de una liga específica sin otorgar autoridad global sobre CanchaYA.',
+              onTap: () => _assignLeagueAdmin(context),
+            ),
+            _AdminAction(
               icon: Icons.groups_3_outlined,
               title: 'Dar permiso de encargado',
               subtitle:
@@ -43,9 +57,9 @@ class AdminCenterScreen extends StatelessWidget {
             ),
             _AdminAction(
               icon: Icons.block_outlined,
-              title: 'Suspensión global de cuenta',
+              title: 'Suspender cuenta global',
               subtitle:
-                  'Solo administración de plataforma puede suspender una cuenta de toda CanchaYA.',
+                  'Impide el uso global de CanchaYA. Esta acción nunca está disponible para un administrador de liga.',
               onTap: () => _promptEmail(
                 context,
                 title: 'Suspender cuenta global',
@@ -56,22 +70,178 @@ class AdminCenterScreen extends StatelessWidget {
                 ),
               ),
             ),
+            _AdminAction(
+              icon: Icons.lock_open_outlined,
+              title: 'Reactivar cuenta global',
+              subtitle:
+                  'Devuelve el estado activo a una cuenta previamente suspendida.',
+              onTap: () => _promptEmail(
+                context,
+                title: 'Reactivar cuenta',
+                actionLabel: 'Reactivar',
+                onSubmit: (email) => AdminRepository().setGlobalAccountStatus(
+                  email: email,
+                  suspended: false,
+                ),
+              ),
+            ),
           ] else ...[
+            _ManagedLeaguesCard(leagueIds: profile.managedLeagueIds),
+            const SizedBox(height: 12),
+            const _InfoCard(
+              icon: Icons.stadium_outlined,
+              text:
+                  'Desde Torneos puedes crear competencias para tus ligas. Dentro de cada torneo podrás registrar equipos y programar partidos con sede, cancha, zona, árbitro y horario.',
+            ),
             const _InfoCard(
               icon: Icons.shield_outlined,
               text:
-                  'Puedes administrar tus ligas y torneos, pero no puedes suspender ni eliminar permanentemente cuentas de CanchaYA.',
+                  'Puedes retirar equipos o participantes de tus torneos, pero no puedes suspender ni eliminar permanentemente su cuenta de CanchaYA.',
             ),
           ],
           const SizedBox(height: 12),
           const _InfoCard(
             icon: Icons.rule_folder_outlined,
             text:
-                'Eliminar a un jugador o equipo de una liga o torneo es una acción local. La cuenta global permanece activa salvo que Administración CanchaYA la suspenda.',
+                'Una baja de torneo o liga es local. La cuenta global sigue existiendo salvo una suspensión realizada por Administración CanchaYA.',
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _createLeague(BuildContext context) async {
+    final name = TextEditingController();
+    final city = TextEditingController();
+    final ownerUid = TextEditingController();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Crear liga'),
+        content: SingleChildScrollView(
+          child: Column(
+            children: [
+              TextField(
+                controller: name,
+                decoration: const InputDecoration(labelText: 'Nombre de liga'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: city,
+                decoration: const InputDecoration(labelText: 'Ciudad'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: ownerUid,
+                decoration: const InputDecoration(
+                  labelText: 'UID del administrador inicial',
+                  helperText:
+                      'Después puedes asignar administradores por correo.',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (name.text.trim().isEmpty ||
+                  ownerUid.text.trim().isEmpty) {
+                return;
+              }
+
+              try {
+                await AdminRepository().createLeague(
+                  name: name.text,
+                  city: city.text,
+                  ownerUid: ownerUid.text.trim(),
+                );
+                if (!dialogContext.mounted) return;
+                Navigator.pop(dialogContext);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Liga creada.')),
+                );
+              } catch (error) {
+                if (!dialogContext.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('No se pudo crear: $error')),
+                );
+              }
+            },
+            child: const Text('Crear liga'),
+          ),
+        ],
+      ),
+    );
+
+    name.dispose();
+    city.dispose();
+    ownerUid.dispose();
+  }
+
+  Future<void> _assignLeagueAdmin(BuildContext context) async {
+    final email = TextEditingController();
+    final leagueId = TextEditingController();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Asignar administrador de liga'),
+        content: SingleChildScrollView(
+          child: Column(
+            children: [
+              TextField(
+                controller: email,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(labelText: 'Correo'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: leagueId,
+                decoration: const InputDecoration(labelText: 'ID de liga'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              try {
+                await AdminRepository().assignLeagueAdminByEmail(
+                  email: email.text,
+                  leagueId: leagueId.text.trim(),
+                );
+                if (!dialogContext.mounted) return;
+                Navigator.pop(dialogContext);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Administrador de liga asignado.'),
+                  ),
+                );
+              } catch (error) {
+                if (!dialogContext.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('No se pudo asignar: $error')),
+                );
+              }
+            },
+            child: const Text('Asignar'),
+          ),
+        ],
+      ),
+    );
+
+    email.dispose();
+    leagueId.dispose();
   }
 
   Future<void> _promptEmail(
@@ -145,7 +315,12 @@ class _HeroCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: colors.primaryContainer,
+        gradient: LinearGradient(
+          colors: [
+            colors.primary,
+            colors.primary.withValues(alpha: 0.76),
+          ],
+        ),
         borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
@@ -153,8 +328,8 @@ class _HeroCard extends StatelessWidget {
         children: [
           Icon(
             platform ? Icons.admin_panel_settings : Icons.stadium_outlined,
-            color: colors.primary,
-            size: 36,
+            color: colors.onPrimary,
+            size: 38,
           ),
           const SizedBox(height: 12),
           Text(
@@ -162,16 +337,60 @@ class _HeroCard extends StatelessWidget {
                 ? 'Control global de plataforma'
                 : 'Control de tu organización',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: colors.onPrimary,
                   fontWeight: FontWeight.w900,
                 ),
           ),
           const SizedBox(height: 6),
           Text(
             platform
-                ? 'Este nivel está por encima de administradores de liga y puede administrar cuentas y permisos globales.'
-                : 'Gestiona torneos, equipos inscritos, campos, horarios, zonas, árbitros y resultados dentro de tus ligas.',
+                ? 'Este nivel está por encima de administradores de liga y controla permisos globales.'
+                : 'Gestiona únicamente las ligas que te fueron asignadas.',
+            style: TextStyle(
+              color: colors.onPrimary.withValues(alpha: 0.9),
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ManagedLeaguesCard extends StatelessWidget {
+  const _ManagedLeaguesCard({required this.leagueIds});
+
+  final List<String> leagueIds;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Ligas bajo tu administración',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 10),
+            if (leagueIds.isEmpty)
+              const Text('Todavía no tienes una liga asignada.')
+            else
+              ...leagueIds.map(
+                (id) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.stadium_outlined, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(id)),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
