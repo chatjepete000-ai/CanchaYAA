@@ -158,6 +158,36 @@ class TournamentRepository {
       throw ArgumentError('Los equipos del partido deben ser diferentes.');
     }
 
+    final existing = await _firestore
+        .collection('matches')
+        .where('tournamentId', isEqualTo: tournamentId)
+        .get();
+
+    for (final doc in existing.docs) {
+      final data = doc.data();
+      final timestamp = data['kickoff'];
+      if (timestamp is! Timestamp) continue;
+
+      final scheduled = timestamp.toDate().toUtc();
+      final requested = kickoff.toUtc();
+      if (scheduled != requested) continue;
+
+      final existingField = (data['field'] as String?)?.trim().toLowerCase();
+      final requestedField = field.trim().toLowerCase();
+      if (requestedField.isNotEmpty && existingField == requestedField) {
+        throw StateError('Esa cancha ya tiene un partido en ese horario.');
+      }
+
+      final existingHome = data['homeTeamId'];
+      final existingAway = data['awayTeamId'];
+      if (existingHome == homeTeamId ||
+          existingAway == homeTeamId ||
+          existingHome == awayTeamId ||
+          existingAway == awayTeamId) {
+        throw StateError('Uno de los equipos ya juega en ese horario.');
+      }
+    }
+
     await _firestore.collection('matches').add({
       'tournamentId': tournamentId,
       'homeTeamId': homeTeamId,
