@@ -486,6 +486,113 @@ class TournamentDetailScreen extends StatelessWidget {
     zone.dispose();
     referee.dispose();
   }
+
+  Future<void> _captureResult(
+    BuildContext context, {
+    required TournamentRepository repository,
+    required ScheduledMatch match,
+    required String homeName,
+    required String awayName,
+  }) async {
+    final homeController = TextEditingController(
+      text: match.homeGoals?.toString() ?? '',
+    );
+    final awayController = TextEditingController(
+      text: match.awayGoals?.toString() ?? '',
+    );
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Capturar resultado'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              homeName + ' vs ' + awayName,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: homeController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(labelText: homeName),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 10),
+                  child: Text('-'),
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: awayController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(labelText: awayName),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Si corriges un marcador ya guardado, CanchaYA conservará un registro de la corrección.',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final homeGoals = int.tryParse(homeController.text.trim());
+              final awayGoals = int.tryParse(awayController.text.trim());
+
+              if (homeGoals == null ||
+                  awayGoals == null ||
+                  homeGoals < 0 ||
+                  awayGoals < 0) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Los goles deben ser números enteros mayores o iguales a cero.',
+                    ),
+                  ),
+                );
+                return;
+              }
+
+              try {
+                await repository.saveResult(
+                  match: match,
+                  homeGoals: homeGoals,
+                  awayGoals: awayGoals,
+                );
+                if (!dialogContext.mounted) return;
+                Navigator.pop(dialogContext);
+              } catch (error) {
+                if (!dialogContext.mounted) return;
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'No se pudo guardar el resultado: ' + error.toString(),
+                    ),
+                  ),
+                );
+              }
+            },
+            child: const Text('Guardar resultado'),
+          ),
+        ],
+      ),
+    );
+
+    homeController.dispose();
+    awayController.dispose();
+  }
 }
 
 class _TournamentHeader extends StatelessWidget {
@@ -545,11 +652,15 @@ class _MatchCard extends StatelessWidget {
     required this.match,
     required this.homeName,
     required this.awayName,
+    required this.canManage,
+    required this.onResult,
   });
 
   final ScheduledMatch match;
   final String homeName;
   final String awayName;
+  final bool canManage;
+  final VoidCallback onResult;
 
   @override
   Widget build(BuildContext context) {
@@ -575,6 +686,17 @@ class _MatchCard extends StatelessWidget {
                 fontSize: 17,
               ),
             ),
+            const SizedBox(height: 10),
+            if (match.status == 'completed' &&
+                match.homeGoals != null &&
+                match.awayGoals != null)
+              Text(
+                match.homeGoals.toString() + '  -  ' + match.awayGoals.toString(),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+              ),
             const SizedBox(height: 12),
             _MatchInfo(icon: Icons.schedule_outlined, text: dateLabel),
             _MatchInfo(
@@ -589,8 +711,24 @@ class _MatchCard extends StatelessWidget {
             if (match.referee.isNotEmpty)
               _MatchInfo(
                 icon: Icons.sports_outlined,
-                text: 'Árbitro: ${match.referee}',
+                text: 'Árbitro: ' + match.referee,
               ),
+            if (canManage) ...[
+              const SizedBox(height: 14),
+              FilledButton.tonalIcon(
+                onPressed: onResult,
+                icon: Icon(
+                  match.status == 'completed'
+                      ? Icons.edit_note_outlined
+                      : Icons.scoreboard_outlined,
+                ),
+                label: Text(
+                  match.status == 'completed'
+                      ? 'Corregir resultado'
+                      : 'Capturar resultado',
+                ),
+              ),
+            ],
           ],
         ),
       ),
