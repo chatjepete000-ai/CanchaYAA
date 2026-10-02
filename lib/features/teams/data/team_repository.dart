@@ -98,6 +98,7 @@ class TeamRepository {
         .where('teamId', isEqualTo: team.id)
         .where('invitedEmail', isEqualTo: normalizedEmail)
         .where('status', isEqualTo: 'pending')
+        .where('createdBy', isEqualTo: user.uid)
         .limit(1)
         .get();
 
