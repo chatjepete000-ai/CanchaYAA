@@ -111,7 +111,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               try {
                 await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-                if (!dialogContext.mounted) return;
+                if (!dialogContext.mounted || !mounted) return;
                 Navigator.pop(dialogContext);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -121,7 +121,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 );
               } on FirebaseAuthException catch (error) {
-                if (!dialogContext.mounted) return;
+                if (!dialogContext.mounted || !mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
