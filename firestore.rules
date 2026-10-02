@@ -246,6 +246,36 @@ service cloud.firestore {
         );
     }
 
+    match /matches/{matchId}/resultAudits/{auditId} {
+      allow read: if activeUser()
+        && exists(/databases/$(database)/documents/matches/$(matchId))
+        && exists(
+          /databases/$(database)/documents/tournaments/$(
+            get(/databases/$(database)/documents/matches/$(matchId)).data.tournamentId
+          )
+        )
+        && isLeagueAdmin(
+          get(
+            /databases/$(database)/documents/tournaments/$(
+              get(/databases/$(database)/documents/matches/$(matchId)).data.tournamentId
+            )
+          ).data.leagueId
+        );
+
+      allow create: if activeUser()
+        && request.resource.data.changedBy == request.auth.uid
+        && exists(/databases/$(database)/documents/matches/$(matchId))
+        && isLeagueAdmin(
+          get(
+            /databases/$(database)/documents/tournaments/$(
+              get(/databases/$(database)/documents/matches/$(matchId)).data.tournamentId
+            )
+          ).data.leagueId
+        );
+
+      allow update, delete: if false;
+    }
+
     match /matches/{matchId} {
       allow read: if activeUser();
 
