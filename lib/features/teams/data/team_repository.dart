@@ -87,6 +87,18 @@ class TeamRepository {
       throw ArgumentError('No puedes invitarte a ti mismo.');
     }
 
+    final existing = await _firestore
+        .collection('teamInvitations')
+        .where('teamId', isEqualTo: team.id)
+        .where('invitedEmail', isEqualTo: normalizedEmail)
+        .where('status', isEqualTo: 'pending')
+        .limit(1)
+        .get();
+
+    if (existing.docs.isNotEmpty) {
+      throw StateError('Ese jugador ya tiene una invitación pendiente.');
+    }
+
     await _firestore.collection('teamInvitations').add({
       'teamId': team.id,
       'teamName': team.name,
