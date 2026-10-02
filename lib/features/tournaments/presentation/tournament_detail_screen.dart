@@ -647,6 +647,65 @@ class _TournamentHeader extends StatelessWidget {
   }
 }
 
+class _StandingsCard extends StatelessWidget {
+  const _StandingsCard({required this.rows});
+
+  final List<StandingRow> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.all(12),
+        child: DataTable(
+          columnSpacing: 18,
+          horizontalMargin: 8,
+          columns: const [
+            DataColumn(label: Text('#')),
+            DataColumn(label: Text('Equipo')),
+            DataColumn(label: Text('PJ')),
+            DataColumn(label: Text('PG')),
+            DataColumn(label: Text('PE')),
+            DataColumn(label: Text('PP')),
+            DataColumn(label: Text('GF')),
+            DataColumn(label: Text('GC')),
+            DataColumn(label: Text('DG')),
+            DataColumn(label: Text('PTS')),
+          ],
+          rows: [
+            for (var index = 0; index < rows.length; index++)
+              DataRow(
+                cells: [
+                  DataCell(Text((index + 1).toString())),
+                  DataCell(
+                    Text(
+                      rows[index].teamName,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  DataCell(Text(rows[index].played.toString())),
+                  DataCell(Text(rows[index].won.toString())),
+                  DataCell(Text(rows[index].drawn.toString())),
+                  DataCell(Text(rows[index].lost.toString())),
+                  DataCell(Text(rows[index].goalsFor.toString())),
+                  DataCell(Text(rows[index].goalsAgainst.toString())),
+                  DataCell(Text(rows[index].goalDifference.toString())),
+                  DataCell(
+                    Text(
+                      rows[index].points.toString(),
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _MatchCard extends StatelessWidget {
   const _MatchCard({
     required this.match,
