@@ -26,7 +26,7 @@ class TournamentsScreen extends StatelessWidget {
       stream: profileRepository.watchCurrentProfile(),
       builder: (context, profileSnapshot) {
         final profile = profileSnapshot.data;
-        final canManage = profile != null &&
+        final canCreateTournament = profile != null &&
             AccessPolicy.canManageLeague(profile.adminScope);
 
         return StreamBuilder<List<TournamentSummary>>(
@@ -57,7 +57,7 @@ class TournamentsScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (canManage)
+                    if (canCreateTournament)
                       IconButton.filled(
                         tooltip: 'Crear torneo',
                         onPressed: () => _createTournament(
@@ -87,7 +87,7 @@ class TournamentsScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            canManage
+                            canCreateTournament
                                 ? 'Como administrador puedes crear el primer torneo de tu liga.'
                                 : 'Cuando una liga publique un torneo podrás consultarlo aquí.',
                             textAlign: TextAlign.center,
@@ -106,7 +106,12 @@ class TournamentsScreen extends StatelessWidget {
                           MaterialPageRoute<void>(
                             builder: (_) => TournamentDetailScreen(
                               tournament: tournament,
-                              canManage: canManage,
+                              canManage:
+                                  profile?.adminScope.name == 'platform' ||
+                                      (profile?.managedLeagueIds.contains(
+                                            tournament.leagueId,
+                                          ) ??
+                                          false),
                             ),
                           ),
                         ),
@@ -129,11 +134,10 @@ class TournamentsScreen extends StatelessWidget {
     final name = TextEditingController();
     final category = TextEditingController();
     final city = TextEditingController();
-    final leagueId = TextEditingController(
-      text: profile.managedLeagueIds.isNotEmpty
-          ? profile.managedLeagueIds.first
-          : '',
-    );
+    String? selectedLeagueId = profile.managedLeagueIds.isNotEmpty
+        ? profile.managedLeagueIds.first
+        : null;
+    final leagueId = TextEditingController();
 
     await showDialog<void>(
       context: context,
@@ -157,15 +161,29 @@ class TournamentsScreen extends StatelessWidget {
                 decoration: const InputDecoration(labelText: 'Ciudad'),
               ),
               const SizedBox(height: 10),
-              TextField(
-                controller: leagueId,
-                readOnly: profile.adminScope.name == 'league',
-                decoration: const InputDecoration(
-                  labelText: 'ID de liga',
-                  helperText:
-                      'El administrador de liga trabaja solo dentro de sus ligas asignadas.',
+              if (profile.adminScope.name == 'league')
+                DropdownButtonFormField<String>(
+                  initialValue: selectedLeagueId,
+                  decoration: const InputDecoration(
+                    labelText: 'Liga',
+                  ),
+                  items: profile.managedLeagueIds
+                      .map(
+                        (id) => DropdownMenuItem(
+                          value: id,
+                          child: Text(id),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) => selectedLeagueId = value,
+                )
+              else
+                TextField(
+                  controller: leagueId,
+                  decoration: const InputDecoration(
+                    labelText: 'ID de liga',
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -176,13 +194,17 @@ class TournamentsScreen extends StatelessWidget {
           ),
           FilledButton(
             onPressed: () async {
-              if (name.text.trim().isEmpty || leagueId.text.trim().isEmpty) {
+              final targetLeagueId = profile.adminScope.name == 'league'
+                  ? selectedLeagueId ?? ''
+                  : leagueId.text.trim();
+
+              if (name.text.trim().isEmpty || targetLeagueId.isEmpty) {
                 return;
               }
 
               try {
                 await repository.createTournament(
-                  leagueId: leagueId.text,
+                  leagueId: targetLeagueId,
                   name: name.text,
                   category: category.text,
                   city: city.text,
