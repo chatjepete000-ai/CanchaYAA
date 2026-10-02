@@ -24,10 +24,12 @@ class ProfileRepository {
       return Stream<UserProfile?>.value(null);
     }
 
-    return _userRef(user.uid).snapshots().map((snapshot) {
+    return _userRef(user.uid).snapshots().asyncMap((snapshot) async {
       final data = snapshot.data();
+
+      UserProfile profile;
       if (!snapshot.exists || data == null) {
-        return UserProfile(
+        profile = UserProfile(
           uid: user.uid,
           displayName: user.displayName ?? '',
           email: user.email ?? '',
@@ -35,9 +37,31 @@ class ProfileRepository {
           adminScope: AdminScope.none,
           status: AccountStatus.active,
         );
+      } else {
+        profile = UserProfile.fromMap(snapshot.id, data);
       }
 
-      return UserProfile.fromMap(snapshot.id, data);
+      final platformAdmin = await _firestore
+          .collection('platformAdmins')
+          .doc(user.uid)
+          .get();
+
+      if (platformAdmin.exists &&
+          platformAdmin.data()?['active'] == true) {
+        return UserProfile(
+          uid: profile.uid,
+          displayName: profile.displayName,
+          email: profile.email,
+          phone: profile.phone,
+          position: profile.position,
+          role: UserRole.admin,
+          adminScope: AdminScope.platform,
+          status: profile.status,
+          managedLeagueIds: profile.managedLeagueIds,
+        );
+      }
+
+      return profile;
     });
   }
 
