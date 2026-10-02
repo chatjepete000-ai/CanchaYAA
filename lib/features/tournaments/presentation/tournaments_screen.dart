@@ -6,6 +6,7 @@ import '../../profile/data/profile_repository.dart';
 import '../../profile/domain/user_profile.dart';
 import '../data/tournament_repository.dart';
 import '../domain/tournament_summary.dart';
+import 'tournament_detail_screen.dart';
 
 class TournamentsScreen extends StatelessWidget {
   const TournamentsScreen({super.key});
@@ -99,7 +100,17 @@ class TournamentsScreen extends StatelessWidget {
                   ...tournaments.map(
                     (tournament) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: _TournamentCard(tournament: tournament),
+                      child: _TournamentCard(
+                        tournament: tournament,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => TournamentDetailScreen(
+                              tournament: tournament,
+                              canManage: canManage,
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
               ],
@@ -199,16 +210,23 @@ class TournamentsScreen extends StatelessWidget {
 }
 
 class _TournamentCard extends StatelessWidget {
-  const _TournamentCard({required this.tournament});
+  const _TournamentCard({
+    required this.tournament,
+    required this.onTap,
+  });
 
   final TournamentSummary tournament;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
     return Card(
-      child: Padding(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
         padding: const EdgeInsets.all(18),
         child: Row(
           children: [
