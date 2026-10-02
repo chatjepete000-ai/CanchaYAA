@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class TeamSummary {
   const TeamSummary({
     required this.id,
