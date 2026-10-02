@@ -154,6 +154,24 @@ class TeamRepository {
     });
   }
 
+  Stream<List<TeamJoinCode>> watchActiveJoinCodes(String teamId) {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return Stream.value(const []);
+
+    return _firestore
+        .collection('teamJoinCodes')
+        .where('teamId', isEqualTo: teamId)
+        .where('createdBy', isEqualTo: uid)
+        .where('status', isEqualTo: 'active')
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => TeamJoinCode.fromMap(doc.id, doc.data()))
+              .where((invite) => invite.isActive)
+              .toList(),
+        );
+  }
+
   Future<TeamJoinCode> createJoinCode(TeamSummary team) async {
     final user = _auth.currentUser;
     if (user == null) throw StateError('No hay una sesión activa.');
