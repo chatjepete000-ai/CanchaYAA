@@ -1,0 +1,303 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function currentUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function activeUser() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && currentUser().data.status == 'active';
+    }
+
+    function isPlatformAdmin() {
+      return activeUser()
+        && exists(/databases/$(database)/documents/platformAdmins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/platformAdmins/$(request.auth.uid)).data.active == true;
+    }
+
+    function isCaptain() {
+      return activeUser()
+        && currentUser().data.role == 'captain';
+    }
+
+    function isLeagueAdmin(leagueId) {
+      return isPlatformAdmin()
+        || (
+          activeUser()
+          && exists(/databases/$(database)/documents/leagues/$(leagueId))
+          && get(/databases/$(database)/documents/leagues/$(leagueId)).data.adminUids.hasAny([request.auth.uid])
+        );
+    }
+
+    match /users/{uid} {
+      allow read: if isSelf(uid) || isPlatformAdmin();
+
+      allow create: if isSelf(uid)
+        && request.resource.data.role == 'player'
+        && request.resource.data.adminScope == 'none'
+        && request.resource.data.status == 'active';
+
+      allow update: if isPlatformAdmin()
+        || (
+          isSelf(uid)
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'displayName',
+            'phone',
+            'position',
+            'updatedAt'
+          ])
+        );
+
+      allow delete: if false;
+    }
+
+    match /platformAdmins/{uid} {
+      allow read: if isSelf(uid) || isPlatformAdmin();
+      allow create, update, delete: if isPlatformAdmin();
+    }
+
+    match /leagues/{leagueId} {
+      allow read: if activeUser();
+      allow create: if isPlatformAdmin();
+      allow update: if activeUser() && isLeagueAdmin(leagueId);
+      allow delete: if isPlatformAdmin();
+    }
+
+    match /teams/{teamId} {
+      allow read: if activeUser();
+
+      allow create: if activeUser()
+        && (
+          isCaptain()
+          || isPlatformAdmin()
+          || currentUser().data.adminScope == 'league'
+        )
+        && request.resource.data.captainUid == request.auth.uid
+        && request.resource.data.memberIds.hasOnly([request.auth.uid]);
+
+      allow update: if isPlatformAdmin()
+        || (
+          activeUser()
+          && resource.data.captainUid == request.auth.uid
+        )
+        || (
+          activeUser()
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'memberIds',
+            'lastAcceptedInvitationId',
+            'updatedAt'
+          ])
+          && request.resource.data.memberIds.hasAll(resource.data.memberIds)
+          && request.resource.data.memberIds.hasAny([request.auth.uid])
+          && request.resource.data.memberIds.size()
+              <= resource.data.memberIds.size() + 1
+          && getAfter(
+            /databases/$(database)/documents/teamInvitations/$(request.resource.data.lastAcceptedInvitationId)
+          ).data.teamId == teamId
+          && getAfter(
+            /databases/$(database)/documents/teamInvitations/$(request.resource.data.lastAcceptedInvitationId)
+          ).data.invitedEmail == request.auth.token.email
+          && getAfter(
+            /databases/$(database)/documents/teamInvitations/$(request.resource.data.lastAcceptedInvitationId)
+          ).data.status == 'accepted'
+          && getAfter(
+            /databases/$(database)/documents/teamInvitations/$(request.resource.data.lastAcceptedInvitationId)
+          ).data.respondedBy == request.auth.uid
+        )
+        || (
+          activeUser()
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'memberIds',
+            'lastJoinCode',
+            'updatedAt'
+          ])
+          && request.resource.data.memberIds.hasAll(resource.data.memberIds)
+          && request.resource.data.memberIds.hasAny([request.auth.uid])
+          && request.resource.data.memberIds.size()
+              <= resource.data.memberIds.size() + 1
+          && getAfter(
+            /databases/$(database)/documents/teamJoinCodes/$(request.resource.data.lastJoinCode)
+          ).data.teamId == teamId
+          && getAfter(
+            /databases/$(database)/documents/teamJoinCodes/$(request.resource.data.lastJoinCode)
+          ).data.status == 'used'
+          && getAfter(
+            /databases/$(database)/documents/teamJoinCodes/$(request.resource.data.lastJoinCode)
+          ).data.usedBy == request.auth.uid
+        );
+
+      allow delete: if isPlatformAdmin();
+    }
+
+    match /teamInvitations/{invitationId} {
+      allow read: if activeUser()
+        && (
+          resource.data.invitedEmail == request.auth.token.email
+          || resource.data.createdBy == request.auth.uid
+          || isPlatformAdmin()
+        );
+
+      allow create: if activeUser()
+        && (
+          isCaptain()
+          || isPlatformAdmin()
+          || currentUser().data.adminScope == 'league'
+        )
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.status == 'pending';
+
+      allow update: if activeUser()
+        && resource.data.invitedEmail == request.auth.token.email
+        && resource.data.status == 'pending'
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'status',
+          'respondedBy',
+          'updatedAt'
+        ])
+        && request.resource.data.status in ['accepted', 'rejected']
+        && request.resource.data.respondedBy == request.auth.uid;
+
+      allow delete: if isPlatformAdmin()
+        || (
+          activeUser()
+          && resource.data.createdBy == request.auth.uid
+          && resource.data.status == 'pending'
+        );
+    }
+
+    match /teamJoinCodes/{code} {
+      allow get: if activeUser();
+
+      allow list: if activeUser()
+        && (
+          resource.data.createdBy == request.auth.uid
+          || isPlatformAdmin()
+        );
+
+      allow create: if activeUser()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.status == 'active'
+        && exists(
+          /databases/$(database)/documents/teams/$(request.resource.data.teamId)
+        )
+        && (
+          get(
+            /databases/$(database)/documents/teams/$(request.resource.data.teamId)
+          ).data.captainUid == request.auth.uid
+          || isPlatformAdmin()
+        );
+
+      allow update: if isPlatformAdmin()
+        || (
+          activeUser()
+          && resource.data.status == 'active'
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'status',
+            'usedBy',
+            'usedAt'
+          ])
+          && request.resource.data.status == 'used'
+          && request.resource.data.usedBy == request.auth.uid
+        )
+        || (
+          activeUser()
+          && resource.data.createdBy == request.auth.uid
+          && resource.data.status == 'active'
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'status',
+            'updatedAt'
+          ])
+          && request.resource.data.status == 'cancelled'
+        );
+
+      allow delete: if isPlatformAdmin();
+    }
+
+    match /tournaments/{tournamentId} {
+      allow read: if activeUser();
+      allow create: if activeUser()
+        && isLeagueAdmin(request.resource.data.leagueId);
+      allow update, delete: if activeUser()
+        && isLeagueAdmin(resource.data.leagueId);
+    }
+
+    match /tournaments/{tournamentId}/teams/{teamId} {
+      allow read: if activeUser();
+
+      allow create, update, delete: if activeUser()
+        && exists(
+          /databases/$(database)/documents/tournaments/$(tournamentId)
+        )
+        && isLeagueAdmin(
+          get(
+            /databases/$(database)/documents/tournaments/$(tournamentId)
+          ).data.leagueId
+        );
+    }
+
+    match /matches/{matchId}/resultAudits/{auditId} {
+      allow read: if activeUser()
+        && exists(/databases/$(database)/documents/matches/$(matchId))
+        && exists(
+          /databases/$(database)/documents/tournaments/$(
+            get(/databases/$(database)/documents/matches/$(matchId)).data.tournamentId
+          )
+        )
+        && isLeagueAdmin(
+          get(
+            /databases/$(database)/documents/tournaments/$(
+              get(/databases/$(database)/documents/matches/$(matchId)).data.tournamentId
+            )
+          ).data.leagueId
+        );
+
+      allow create: if activeUser()
+        && request.resource.data.changedBy == request.auth.uid
+        && exists(/databases/$(database)/documents/matches/$(matchId))
+        && isLeagueAdmin(
+          get(
+            /databases/$(database)/documents/tournaments/$(
+              get(/databases/$(database)/documents/matches/$(matchId)).data.tournamentId
+            )
+          ).data.leagueId
+        );
+
+      allow update, delete: if false;
+    }
+
+    match /matches/{matchId} {
+      allow read: if activeUser();
+
+      allow create: if activeUser()
+        && exists(
+          /databases/$(database)/documents/tournaments/$(request.resource.data.tournamentId)
+        )
+        && isLeagueAdmin(
+          get(
+            /databases/$(database)/documents/tournaments/$(request.resource.data.tournamentId)
+          ).data.leagueId
+        );
+
+      allow update, delete: if activeUser()
+        && exists(
+          /databases/$(database)/documents/tournaments/$(resource.data.tournamentId)
+        )
+        && isLeagueAdmin(
+          get(
+            /databases/$(database)/documents/tournaments/$(resource.data.tournamentId)
+          ).data.leagueId
+        );
+    }
+  }
+}
