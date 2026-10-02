@@ -113,7 +113,7 @@ class AdminCenterScreen extends StatelessWidget {
   Future<void> _createLeague(BuildContext context) async {
     final name = TextEditingController();
     final city = TextEditingController();
-    final ownerUid = TextEditingController();
+    final adminEmail = TextEditingController();
 
     await showDialog<void>(
       context: context,
@@ -133,11 +133,12 @@ class AdminCenterScreen extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               TextField(
-                controller: ownerUid,
+                controller: adminEmail,
+                keyboardType: TextInputType.emailAddress,
                 decoration: const InputDecoration(
-                  labelText: 'UID del administrador inicial',
+                  labelText: 'Correo del administrador inicial',
                   helperText:
-                      'Después puedes asignar administradores por correo.',
+                      'Debe ser una cuenta CanchaYA ya registrada.',
                 ),
               ),
             ],
@@ -151,7 +152,7 @@ class AdminCenterScreen extends StatelessWidget {
           FilledButton(
             onPressed: () async {
               if (name.text.trim().isEmpty ||
-                  ownerUid.text.trim().isEmpty) {
+                  adminEmail.text.trim().isEmpty) {
                 return;
               }
 
@@ -159,7 +160,7 @@ class AdminCenterScreen extends StatelessWidget {
                 await AdminRepository().createLeague(
                   name: name.text,
                   city: city.text,
-                  ownerUid: ownerUid.text.trim(),
+                  adminEmail: adminEmail.text,
                 );
                 if (!dialogContext.mounted) return;
                 Navigator.pop(dialogContext);
@@ -181,7 +182,7 @@ class AdminCenterScreen extends StatelessWidget {
 
     name.dispose();
     city.dispose();
-    ownerUid.dispose();
+    adminEmail.dispose();
   }
 
   Future<void> _assignLeagueAdmin(BuildContext context) async {
