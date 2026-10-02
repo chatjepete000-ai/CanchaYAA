@@ -8,6 +8,7 @@ import '../../auth/presentation/login_screen.dart';
 import '../../auth/presentation/register_screen.dart';
 import '../../teams/data/team_repository.dart';
 import '../../teams/domain/team_models.dart';
+import '../../teams/presentation/join_team_screen.dart';
 import '../data/profile_repository.dart';
 import '../domain/user_profile.dart';
 import 'edit_profile_screen.dart';
@@ -305,6 +306,19 @@ class _ProfileContent extends StatelessWidget {
             ),
             const Icon(Icons.mail_outline),
           ],
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const JoinTeamScreen(),
+              ),
+            ),
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Tengo un código o QR'),
+          ),
         ),
         const SizedBox(height: 10),
         StreamBuilder<List<TeamInvitation>>(
