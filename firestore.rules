@@ -100,6 +100,8 @@ service cloud.firestore {
           ])
           && request.resource.data.memberIds.hasAll(resource.data.memberIds)
           && request.resource.data.memberIds.hasAny([request.auth.uid])
+          && request.resource.data.memberIds.size()
+              <= resource.data.memberIds.size() + 1
           && getAfter(
             /databases/$(database)/documents/teamInvitations/$(request.resource.data.lastAcceptedInvitationId)
           ).data.teamId == teamId
@@ -112,6 +114,27 @@ service cloud.firestore {
           && getAfter(
             /databases/$(database)/documents/teamInvitations/$(request.resource.data.lastAcceptedInvitationId)
           ).data.respondedBy == request.auth.uid
+        )
+        || (
+          activeUser()
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'memberIds',
+            'lastJoinCode',
+            'updatedAt'
+          ])
+          && request.resource.data.memberIds.hasAll(resource.data.memberIds)
+          && request.resource.data.memberIds.hasAny([request.auth.uid])
+          && request.resource.data.memberIds.size()
+              <= resource.data.memberIds.size() + 1
+          && getAfter(
+            /databases/$(database)/documents/teamJoinCodes/$(request.resource.data.lastJoinCode)
+          ).data.teamId == teamId
+          && getAfter(
+            /databases/$(database)/documents/teamJoinCodes/$(request.resource.data.lastJoinCode)
+          ).data.status == 'used'
+          && getAfter(
+            /databases/$(database)/documents/teamJoinCodes/$(request.resource.data.lastJoinCode)
+          ).data.usedBy == request.auth.uid
         );
 
       allow delete: if isPlatformAdmin();
@@ -151,6 +174,54 @@ service cloud.firestore {
           && resource.data.createdBy == request.auth.uid
           && resource.data.status == 'pending'
         );
+    }
+
+    match /teamJoinCodes/{code} {
+      allow get: if activeUser();
+
+      allow list: if activeUser()
+        && (
+          resource.data.createdBy == request.auth.uid
+          || isPlatformAdmin()
+        );
+
+      allow create: if activeUser()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.status == 'active'
+        && exists(
+          /databases/$(database)/documents/teams/$(request.resource.data.teamId)
+        )
+        && (
+          get(
+            /databases/$(database)/documents/teams/$(request.resource.data.teamId)
+          ).data.captainUid == request.auth.uid
+          || isPlatformAdmin()
+        );
+
+      allow update: if isPlatformAdmin()
+        || (
+          activeUser()
+          && resource.data.status == 'active'
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'status',
+            'usedBy',
+            'usedAt'
+          ])
+          && request.resource.data.status == 'used'
+          && request.resource.data.usedBy == request.auth.uid
+        )
+        || (
+          activeUser()
+          && resource.data.createdBy == request.auth.uid
+          && resource.data.status == 'active'
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'status',
+            'updatedAt'
+          ])
+          && request.resource.data.status == 'cancelled'
+        );
+
+      allow delete: if isPlatformAdmin();
     }
 
     match /tournaments/{tournamentId} {
