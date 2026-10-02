@@ -13,6 +13,14 @@ class TeamRepository {
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
 
+  Stream<List<TeamSummary>> watchAllTeams() {
+    return _firestore.collection('teams').snapshots().map(
+          (snapshot) => snapshot.docs
+              .map((doc) => TeamSummary.fromMap(doc.id, doc.data()))
+              .toList(),
+        );
+  }
+
   Stream<List<TeamSummary>> watchMyTeams() {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return Stream.value(const []);
