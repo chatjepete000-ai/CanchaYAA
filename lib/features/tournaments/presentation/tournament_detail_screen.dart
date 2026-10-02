@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../teams/data/team_repository.dart';
 import '../../teams/domain/team_models.dart';
 import '../data/tournament_repository.dart';
+import '../domain/standings.dart';
 import '../domain/tournament_summary.dart';
 
 class TournamentDetailScreen extends StatelessWidget {
@@ -144,12 +145,40 @@ class TournamentDetailScreen extends StatelessWidget {
                       team.teamId: team.teamName,
                   };
 
+                  final teams = teamSnapshot.data ?? const [];
+                  final standings = calculateStandings(
+                    teams: teams,
+                    matches: matches,
+                  );
+
                   return Column(
-                    children: matches
-                        .map(
-                          (match) => Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: _MatchCard(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (standings.isNotEmpty) ...[
+                        Text(
+                          'Tabla de posiciones',
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                        ),
+                        const SizedBox(height: 10),
+                        _StandingsCard(rows: standings),
+                        const SizedBox(height: 22),
+                      ],
+                      ...matches.map(
+                        (match) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _MatchCard(
+                            match: match,
+                            homeName:
+                                names[match.homeTeamId] ?? match.homeTeamId,
+                            awayName:
+                                names[match.awayTeamId] ?? match.awayTeamId,
+                            canManage: canManage,
+                            onResult: () => _captureResult(
+                              context,
+                              repository: tournamentRepository,
                               match: match,
                               homeName:
                                   names[match.homeTeamId] ?? match.homeTeamId,
@@ -157,8 +186,9 @@ class TournamentDetailScreen extends StatelessWidget {
                                   names[match.awayTeamId] ?? match.awayTeamId,
                             ),
                           ),
-                        )
-                        .toList(),
+                        ),
+                      ),
+                    ],
                   );
                 },
               );
