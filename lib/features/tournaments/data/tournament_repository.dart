@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../teams/domain/team_models.dart';
 import '../domain/tournament_summary.dart';
 
 class TournamentRepository {
@@ -17,6 +18,44 @@ class TournamentRepository {
               .map((doc) => TournamentSummary.fromMap(doc.id, doc.data()))
               .toList(),
         );
+  }
+
+  Stream<List<TournamentTeamEntry>> watchEnrolledTeams(String tournamentId) {
+    return _firestore
+        .collection('tournaments')
+        .doc(tournamentId)
+        .collection('teams')
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map(
+                (doc) => TournamentTeamEntry.fromMap(
+                  doc.id,
+                  doc.data(),
+                ),
+              )
+              .toList(),
+        );
+  }
+
+  Stream<List<ScheduledMatch>> watchMatches(String tournamentId) {
+    return _firestore
+        .collection('matches')
+        .where('tournamentId', isEqualTo: tournamentId)
+        .snapshots()
+        .map((snapshot) {
+      final matches = snapshot.docs
+          .map((doc) => ScheduledMatch.fromMap(doc.id, doc.data()))
+          .toList();
+
+      matches.sort((a, b) {
+        final aDate = a.kickoff ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bDate = b.kickoff ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return aDate.compareTo(bDate);
+      });
+
+      return matches;
+    });
   }
 
   Future<void> createTournament({
@@ -37,6 +76,34 @@ class TournamentRepository {
     });
   }
 
+  Future<void> enrollTeam({
+    required String tournamentId,
+    required TeamSummary team,
+  }) async {
+    await _firestore
+        .collection('tournaments')
+        .doc(tournamentId)
+        .collection('teams')
+        .doc(team.id)
+        .set({
+      'teamName': team.name,
+      'status': 'active',
+      'enrolledAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> removeTeam({
+    required String tournamentId,
+    required String teamId,
+  }) async {
+    await _firestore
+        .collection('tournaments')
+        .doc(tournamentId)
+        .collection('teams')
+        .doc(teamId)
+        .delete();
+  }
+
   Future<void> createMatch({
     required String tournamentId,
     required String homeTeamId,
@@ -47,6 +114,10 @@ class TournamentRepository {
     required String referee,
     required DateTime kickoff,
   }) async {
+    if (homeTeamId == awayTeamId) {
+      throw ArgumentError('Los equipos del partido deben ser diferentes.');
+    }
+
     await _firestore.collection('matches').add({
       'tournamentId': tournamentId,
       'homeTeamId': homeTeamId,
