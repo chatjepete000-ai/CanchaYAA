@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 class OverviewScreen extends StatelessWidget {
@@ -6,6 +7,10 @@ class OverviewScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (Firebase.apps.isEmpty) {
+      return const _HomeContent(user: null);
+    }
+
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
@@ -202,7 +207,7 @@ class _HomeContent extends StatelessWidget {
         _QuickAction(
           icon: Icons.groups_2_outlined,
           title: 'Mi equipo',
-          subtitle: 'Crea un equipo o únete mediante invitación.',
+          subtitle: 'Consulta tu equipo y las invitaciones que recibas.',
           onTap: () {
             _showComingSoon(
               context,
@@ -287,7 +292,7 @@ class _HomeContent extends StatelessWidget {
                     ),
                     SizedBox(height: 4),
                     Text(
-                      'Crea o únete a un equipo para comenzar a participar en CanchaYA.',
+                      'Cuando un encargado te invite a un equipo, podrás aceptarlo desde tu Perfil.',
                     ),
                   ],
                 ),
