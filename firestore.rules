@@ -21,20 +21,20 @@ service cloud.firestore {
     }
 
     function isPlatformAdmin() {
-      return signedIn()
+      return activeUser()
         && exists(/databases/$(database)/documents/platformAdmins/$(request.auth.uid))
         && get(/databases/$(database)/documents/platformAdmins/$(request.auth.uid)).data.active == true;
     }
 
     function isCaptain() {
-      return signedIn()
+      return activeUser()
         && currentUser().data.role == 'captain';
     }
 
     function isLeagueAdmin(leagueId) {
       return isPlatformAdmin()
         || (
-          signedIn()
+          activeUser()
           && exists(/databases/$(database)/documents/leagues/$(leagueId))
           && get(/databases/$(database)/documents/leagues/$(leagueId)).data.adminUids.hasAny([request.auth.uid])
         );
@@ -70,7 +70,7 @@ service cloud.firestore {
     match /leagues/{leagueId} {
       allow read: if activeUser();
       allow create: if isPlatformAdmin();
-      allow update: if isLeagueAdmin(leagueId);
+      allow update: if activeUser() && isLeagueAdmin(leagueId);
       allow delete: if isPlatformAdmin();
     }
 
@@ -118,7 +118,7 @@ service cloud.firestore {
     }
 
     match /teamInvitations/{invitationId} {
-      allow read: if signedIn()
+      allow read: if activeUser()
         && (
           resource.data.invitedEmail == request.auth.token.email
           || resource.data.createdBy == request.auth.uid
