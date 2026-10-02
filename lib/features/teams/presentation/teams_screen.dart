@@ -6,6 +6,7 @@ import '../../profile/data/profile_repository.dart';
 import '../../profile/domain/user_profile.dart';
 import '../data/team_repository.dart';
 import '../domain/team_models.dart';
+import 'team_invite_qr_screen.dart';
 
 class TeamsScreen extends StatelessWidget {
   const TeamsScreen({super.key});
@@ -88,6 +89,11 @@ class TeamsScreen extends StatelessWidget {
                             profile.adminScope.name == 'platform',
                         onInvite: () =>
                             _invitePlayer(context, teamRepository, team),
+                        onQrInvite: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => TeamInviteQrScreen(team: team),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -223,11 +229,13 @@ class _TeamCard extends StatelessWidget {
     required this.team,
     required this.canManage,
     required this.onInvite,
+    required this.onQrInvite,
   });
 
   final TeamSummary team;
   final bool canManage;
   final VoidCallback onInvite;
+  final VoidCallback onQrInvite;
 
   @override
   Widget build(BuildContext context) {
@@ -277,10 +285,32 @@ class _TeamCard extends StatelessWidget {
                 Text('${team.memberIds.length} jugadores'),
                 const Spacer(),
                 if (canManage)
-                  FilledButton.tonalIcon(
-                    onPressed: onInvite,
-                    icon: const Icon(Icons.person_add_alt_1),
-                    label: const Text('Invitar'),
+                  PopupMenuButton<String>(
+                    tooltip: 'Invitar jugadores',
+                    onSelected: (value) {
+                      if (value == 'email') onInvite();
+                      if (value == 'qr') onQrInvite();
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: 'email',
+                        child: ListTile(
+                          leading: Icon(Icons.email_outlined),
+                          title: Text('Invitar por correo'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'qr',
+                        child: ListTile(
+                          leading: Icon(Icons.qr_code_2),
+                          title: Text('Generar QR / código'),
+                        ),
+                      ),
+                    ],
+                    child: const Chip(
+                      avatar: Icon(Icons.person_add_alt_1, size: 18),
+                      label: Text('Invitar'),
+                    ),
                   ),
               ],
             ),
