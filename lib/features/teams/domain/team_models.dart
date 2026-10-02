@@ -74,4 +74,18 @@ class TeamJoinCode {
   bool get isActive =>
       status == 'active' &&
       (expiresAt == null || expiresAt!.isAfter(DateTime.now()));
+
+  factory TeamJoinCode.fromMap(
+    String code,
+    Map<String, dynamic> data,
+  ) {
+    final expires = data['expiresAt'];
+    return TeamJoinCode(
+      code: code,
+      teamId: (data['teamId'] as String?) ?? '',
+      teamName: (data['teamName'] as String?) ?? 'Equipo',
+      status: (data['status'] as String?) ?? 'invalid',
+      expiresAt: expires is Timestamp ? expires.toDate().toLocal() : null,
+    );
+  }
 }
