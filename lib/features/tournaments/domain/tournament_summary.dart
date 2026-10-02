@@ -8,6 +8,8 @@ class TournamentSummary {
     required this.category,
     required this.city,
     required this.status,
+    this.homeGoals,
+    this.awayGoals,
   });
 
   final String id;
@@ -71,6 +73,8 @@ class ScheduledMatch {
   final String referee;
   final DateTime? kickoff;
   final String status;
+  final int? homeGoals;
+  final int? awayGoals;
 
   factory ScheduledMatch.fromMap(String id, Map<String, dynamic> data) {
     final timestamp = data['kickoff'];
@@ -84,6 +88,8 @@ class ScheduledMatch {
       referee: (data['referee'] as String?) ?? '',
       kickoff: timestamp is Timestamp ? timestamp.toDate().toLocal() : null,
       status: (data['status'] as String?) ?? 'scheduled',
+      homeGoals: data['homeGoals'] as int?,
+      awayGoals: data['awayGoals'] as int?,
     );
   }
 }
