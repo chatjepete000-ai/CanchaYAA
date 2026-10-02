@@ -54,3 +54,24 @@ class TeamInvitation {
     );
   }
 }
+
+
+class TeamJoinCode {
+  const TeamJoinCode({
+    required this.code,
+    required this.teamId,
+    required this.teamName,
+    required this.status,
+    required this.expiresAt,
+  });
+
+  final String code;
+  final String teamId;
+  final String teamName;
+  final String status;
+  final DateTime? expiresAt;
+
+  bool get isActive =>
+      status == 'active' &&
+      (expiresAt == null || expiresAt!.isAfter(DateTime.now()));
+}
