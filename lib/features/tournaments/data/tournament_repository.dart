@@ -1,13 +1,18 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../teams/domain/team_models.dart';
 import '../domain/tournament_summary.dart';
 
 class TournamentRepository {
-  TournamentRepository({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+  TournamentRepository({
+    FirebaseFirestore? firestore,
+    FirebaseAuth? auth,
+  })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        _auth = auth ?? FirebaseAuth.instance;
 
   final FirebaseFirestore _firestore;
+  final FirebaseAuth _auth;
 
   Stream<List<TournamentSummary>> watchTournaments() {
     return _firestore
@@ -102,6 +107,41 @@ class TournamentRepository {
         .collection('teams')
         .doc(teamId)
         .delete();
+  }
+
+  Future<void> saveResult({
+    required ScheduledMatch match,
+    required int homeGoals,
+    required int awayGoals,
+  }) async {
+    if (homeGoals < 0 || awayGoals < 0) {
+      throw ArgumentError('Los goles no pueden ser negativos.');
+    }
+
+    final user = _auth.currentUser;
+    if (user == null) throw StateError('No hay una sesión activa.');
+
+    final matchRef = _firestore.collection('matches').doc(match.id);
+    final auditRef = matchRef.collection('resultAudits').doc();
+    final batch = _firestore.batch();
+
+    batch.set(auditRef, {
+      'changedBy': user.uid,
+      'previousHomeGoals': match.homeGoals,
+      'previousAwayGoals': match.awayGoals,
+      'newHomeGoals': homeGoals,
+      'newAwayGoals': awayGoals,
+      'changedAt': FieldValue.serverTimestamp(),
+    });
+
+    batch.update(matchRef, {
+      'homeGoals': homeGoals,
+      'awayGoals': awayGoals,
+      'status': 'completed',
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
   }
 
   Future<void> createMatch({
