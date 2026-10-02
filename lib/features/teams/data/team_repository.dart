@@ -120,6 +120,7 @@ class TeamRepository {
       if (accept) {
         transaction.update(teamRef, {
           'memberIds': FieldValue.arrayUnion([user.uid]),
+          'lastAcceptedInvitationId': invitation.id,
           'updatedAt': FieldValue.serverTimestamp(),
         });
       }
