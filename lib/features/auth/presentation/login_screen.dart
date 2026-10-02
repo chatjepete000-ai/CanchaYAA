@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../domain/auth_validators.dart';
@@ -12,9 +13,12 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
+
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+
   bool _obscurePassword = true;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -23,22 +27,113 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _validateOnly() {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+  Future<void> _login() async {
+    final isValid = _formKey.currentState?.validate() ?? false;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Formulario válido. Falta conectar Firebase Authentication para iniciar sesión de forma real.',
+    if (!isValid) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sesión iniciada correctamente.'),
         ),
-      ),
-    );
+      );
+
+      Navigator.of(context).pop();
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      String message = 'No se pudo iniciar sesión.';
+
+      switch (e.code) {
+        case 'invalid-email':
+          message = 'El correo electrónico no es válido.';
+          break;
+
+        case 'user-disabled':
+          message = 'Esta cuenta ha sido deshabilitada.';
+          break;
+
+        case 'user-not-found':
+          message = 'No existe una cuenta registrada con ese correo.';
+          break;
+
+        case 'wrong-password':
+          message = 'La contraseña es incorrecta.';
+          break;
+
+        case 'invalid-credential':
+          message = 'El correo o la contraseña son incorrectos.';
+          break;
+
+        case 'too-many-requests':
+          message =
+              'Se hicieron demasiados intentos. Espera un momento e inténtalo nuevamente.';
+          break;
+
+        case 'network-request-failed':
+          message =
+              'No se pudo conectar con Firebase. Revisa tu conexión a internet.';
+          break;
+
+        case 'operation-not-allowed':
+          message =
+              'El inicio de sesión con correo y contraseña no está habilitado.';
+          break;
+
+        default:
+          message = 'No se pudo iniciar sesión. Código: ${e.code}';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Ocurrió un error inesperado al iniciar sesión.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Iniciar sesión')),
+      appBar: AppBar(
+        title: const Text('Iniciar sesión'),
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(24),
@@ -49,6 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
               color: Theme.of(context).colorScheme.primary,
             ),
             const SizedBox(height: 18),
+
             Text(
               'Bienvenido a CanchaYA',
               textAlign: TextAlign.center,
@@ -56,12 +152,16 @@ class _LoginScreenState extends State<LoginScreen> {
                     fontWeight: FontWeight.w800,
                   ),
             ),
+
             const SizedBox(height: 8),
+
             const Text(
               'Accede con tu correo y contraseña.',
               textAlign: TextAlign.center,
             ),
+
             const SizedBox(height: 28),
+
             Form(
               key: _formKey,
               child: Column(
@@ -69,29 +169,41 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    autofillHints: const [AutofillHints.email],
+                    autofillHints: const [
+                      AutofillHints.email,
+                    ],
                     textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
                       labelText: 'Correo',
-                      prefixIcon: Icon(Icons.email_outlined),
+                      prefixIcon: Icon(
+                        Icons.email_outlined,
+                      ),
                     ),
                     validator: AuthValidators.email,
                   ),
+
                   const SizedBox(height: 14),
+
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
-                    autofillHints: const [AutofillHints.password],
+                    autofillHints: const [
+                      AutofillHints.password,
+                    ],
                     textInputAction: TextInputAction.done,
                     decoration: InputDecoration(
                       labelText: 'Contraseña',
-                      prefixIcon: const Icon(Icons.lock_outline),
+                      prefixIcon: const Icon(
+                        Icons.lock_outline,
+                      ),
                       suffixIcon: IconButton(
                         tooltip: _obscurePassword
                             ? 'Mostrar contraseña'
                             : 'Ocultar contraseña',
                         onPressed: () {
-                          setState(() => _obscurePassword = !_obscurePassword);
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
                         },
                         icon: Icon(
                           _obscurePassword
@@ -101,30 +213,58 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     validator: AuthValidators.password,
-                    onFieldSubmitted: (_) => _validateOnly(),
+                    onFieldSubmitted: (_) {
+                      if (!_isLoading) {
+                        _login();
+                      }
+                    },
                   ),
+
                   const SizedBox(height: 20),
+
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
-                      onPressed: _validateOnly,
-                      icon: const Icon(Icons.login),
-                      label: const Text('Entrar'),
+                      onPressed: _isLoading
+                          ? null
+                          : () {
+                              _login();
+                            },
+                      icon: _isLoading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.login,
+                            ),
+                      label: Text(
+                        _isLoading ? 'Iniciando sesión...' : 'Entrar',
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
+
             const SizedBox(height: 18),
+
             TextButton(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const RegisterScreen(),
-                  ),
-                );
-              },
-              child: const Text('¿No tienes cuenta? Crear cuenta'),
+              onPressed: _isLoading
+                  ? null
+                  : () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const RegisterScreen(),
+                        ),
+                      );
+                    },
+              child: const Text(
+                '¿No tienes cuenta? Crear cuenta',
+              ),
             ),
           ],
         ),

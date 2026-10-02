@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "998214942076",
+    "project_id": "canchaya-8ccdb",
+    "storage_bucket": "canchaya-8ccdb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:998214942076:android:e9f38cc29dbd0f59fab8f9",
+        "android_client_info": {
+          "package_name": "com.canchaya.cancha_ya"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA3KicaYt6oWNlwUj0FthZKQ9qkCxNvECQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
