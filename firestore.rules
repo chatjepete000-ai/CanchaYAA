@@ -14,6 +14,12 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
+    function activeUser() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && currentUser().data.status == 'active';
+    }
+
     function isPlatformAdmin() {
       return signedIn()
         && exists(/databases/$(database)/documents/platformAdmins/$(request.auth.uid))
@@ -62,16 +68,16 @@ service cloud.firestore {
     }
 
     match /leagues/{leagueId} {
-      allow read: if signedIn();
+      allow read: if activeUser();
       allow create: if isPlatformAdmin();
       allow update: if isLeagueAdmin(leagueId);
       allow delete: if isPlatformAdmin();
     }
 
     match /teams/{teamId} {
-      allow read: if signedIn();
+      allow read: if activeUser();
 
-      allow create: if signedIn()
+      allow create: if activeUser()
         && (
           isCaptain()
           || isPlatformAdmin()
@@ -82,11 +88,11 @@ service cloud.firestore {
 
       allow update: if isPlatformAdmin()
         || (
-          signedIn()
+          activeUser()
           && resource.data.captainUid == request.auth.uid
         )
         || (
-          signedIn()
+          activeUser()
           && request.resource.data.diff(resource.data).changedKeys().hasOnly([
             'memberIds',
             'lastAcceptedInvitationId',
@@ -119,7 +125,7 @@ service cloud.firestore {
           || isPlatformAdmin()
         );
 
-      allow create: if signedIn()
+      allow create: if activeUser()
         && (
           isCaptain()
           || isPlatformAdmin()
@@ -128,7 +134,7 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.status == 'pending';
 
-      allow update: if signedIn()
+      allow update: if activeUser()
         && resource.data.invitedEmail == request.auth.token.email
         && resource.data.status == 'pending'
         && request.resource.data.diff(resource.data).changedKeys().hasOnly([
@@ -141,24 +147,24 @@ service cloud.firestore {
 
       allow delete: if isPlatformAdmin()
         || (
-          signedIn()
+          activeUser()
           && resource.data.createdBy == request.auth.uid
           && resource.data.status == 'pending'
         );
     }
 
     match /tournaments/{tournamentId} {
-      allow read: if signedIn();
-      allow create: if signedIn()
+      allow read: if activeUser();
+      allow create: if activeUser()
         && isLeagueAdmin(request.resource.data.leagueId);
-      allow update, delete: if signedIn()
+      allow update, delete: if activeUser()
         && isLeagueAdmin(resource.data.leagueId);
     }
 
     match /tournaments/{tournamentId}/teams/{teamId} {
-      allow read: if signedIn();
+      allow read: if activeUser();
 
-      allow create, update, delete: if signedIn()
+      allow create, update, delete: if activeUser()
         && exists(
           /databases/$(database)/documents/tournaments/$(tournamentId)
         )
@@ -170,9 +176,9 @@ service cloud.firestore {
     }
 
     match /matches/{matchId} {
-      allow read: if signedIn();
+      allow read: if activeUser();
 
-      allow create: if signedIn()
+      allow create: if activeUser()
         && exists(
           /databases/$(database)/documents/tournaments/$(request.resource.data.tournamentId)
         )
@@ -182,7 +188,7 @@ service cloud.firestore {
           ).data.leagueId
         );
 
-      allow update, delete: if signedIn()
+      allow update, delete: if activeUser()
         && exists(
           /databases/$(database)/documents/tournaments/$(resource.data.tournamentId)
         )
