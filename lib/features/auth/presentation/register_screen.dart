@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../profile/data/profile_repository.dart';
 import '../domain/auth_validators.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -50,8 +51,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
         password: _passwordController.text,
       );
 
-      await credential.user?.updateDisplayName(
-        _nameController.text.trim(),
+      final user = credential.user;
+
+      if (user == null) {
+        throw StateError(
+          'Firebase no devolvió el usuario creado.',
+        );
+      }
+
+      final cleanName = _nameController.text.trim();
+
+      // Guardamos el nombre también en Firebase Authentication.
+      await user.updateDisplayName(
+        cleanName,
+      );
+
+      // Recargamos la información del usuario.
+      await user.reload();
+
+      final refreshedUser = FirebaseAuth.instance.currentUser;
+
+      if (refreshedUser == null) {
+        throw StateError(
+          'No se pudo recuperar la sesión del usuario recién creado.',
+        );
+      }
+
+      // Creamos el perfil real en Firestore.
+      await ProfileRepository().createInitialProfile(
+        refreshedUser,
       );
 
       if (!mounted) {
@@ -103,23 +131,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
           break;
 
         default:
-          message = 'No se pudo crear la cuenta. Código: ${e.code}';
+          message =
+              'No se pudo crear la cuenta. Código: ${e.code}';
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(message),
+          content: Text(
+            message,
+          ),
         ),
       );
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Ocurrió un error inesperado al crear la cuenta.',
+            'La cuenta se creó, pero hubo un problema al guardar el perfil: $error',
           ),
         ),
       );
@@ -134,9 +165,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Crear cuenta'),
+        title: const Text(
+          'Crear cuenta',
+        ),
       ),
       body: SafeArea(
         child: Form(
@@ -144,16 +179,63 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: ListView(
             padding: const EdgeInsets.all(24),
             children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: colors.primaryContainer,
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundColor: colors.primary,
+                      child: Icon(
+                        Icons.sports_soccer,
+                        color: colors.onPrimary,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Únete a CanchaYA',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 18,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Crea tu cuenta para participar en equipos, torneos e invitaciones.',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 26),
+
               Text(
                 'Crea tu perfil',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                style:
+                    Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
               ),
+
               const SizedBox(height: 6),
-              const Text(
-                'El acceso base será con correo y contraseña.',
+
+              Text(
+                'Todos los usuarios comienzan como Jugador.',
+                style: Theme.of(context).textTheme.bodyMedium,
               ),
+
               const SizedBox(height: 24),
 
               TextFormField(
@@ -163,7 +245,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   AutofillHints.name,
                 ],
                 decoration: const InputDecoration(
-                  labelText: 'Nombre',
+                  labelText: 'Nombre completo',
                   prefixIcon: Icon(
                     Icons.person_outline,
                   ),
@@ -206,9 +288,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     Icons.lock_outline,
                   ),
                   suffixIcon: IconButton(
+                    tooltip: _obscurePassword
+                        ? 'Mostrar contraseña'
+                        : 'Ocultar contraseña',
                     onPressed: () {
                       setState(() {
-                        _obscurePassword = !_obscurePassword;
+                        _obscurePassword =
+                            !_obscurePassword;
                       });
                     },
                     icon: Icon(
@@ -236,9 +322,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     Icons.lock_reset_outlined,
                   ),
                   suffixIcon: IconButton(
+                    tooltip: _obscureConfirm
+                        ? 'Mostrar contraseña'
+                        : 'Ocultar contraseña',
                     onPressed: () {
                       setState(() {
-                        _obscureConfirm = !_obscureConfirm;
+                        _obscureConfirm =
+                            !_obscureConfirm;
                       });
                     },
                     icon: Icon(
@@ -261,19 +351,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 },
               ),
 
-              const SizedBox(height: 22),
+              const SizedBox(height: 24),
 
               FilledButton.icon(
-                onPressed: _isLoading
-                    ? null
-                    : () {
-                        _registerUser();
-                      },
+                onPressed:
+                    _isLoading ? null : _registerUser,
                 icon: _isLoading
                     ? const SizedBox(
                         width: 18,
                         height: 18,
-                        child: CircularProgressIndicator(
+                        child:
+                            CircularProgressIndicator(
                           strokeWidth: 2,
                         ),
                       )
@@ -281,7 +369,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         Icons.person_add_alt_1,
                       ),
                 label: Text(
-                  _isLoading ? 'Creando cuenta...' : 'Crear cuenta',
+                  _isLoading
+                      ? 'Creando cuenta...'
+                      : 'Crear cuenta',
+                ),
+              ),
+
+              const SizedBox(height: 18),
+
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color:
+                      colors.surfaceContainerHighest,
+                  borderRadius:
+                      BorderRadius.circular(16),
+                ),
+                child: const Row(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.security_outlined,
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Tu cuenta se crea como Jugador. Los permisos de Capitán y Administrador se asignan de forma controlada y no pueden elegirse durante el registro.',
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

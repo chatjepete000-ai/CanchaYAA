@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 class OverviewScreen extends StatelessWidget {
@@ -6,12 +7,22 @@ class OverviewScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Durante algunos widget tests Firebase no está inicializado.
+    // En ese caso mostramos Inicio normalmente, pero sin consultar Auth.
+    if (Firebase.apps.isEmpty) {
+      return const _HomeContent(
+        user: null,
+      );
+    }
+
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         final user = snapshot.data;
 
-        return _HomeContent(user: user);
+        return _HomeContent(
+          user: user,
+        );
       },
     );
   }
@@ -35,37 +46,32 @@ class _HomeContent extends StatelessWidget {
         : 'Jugador';
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+      padding: const EdgeInsets.fromLTRB(
+        20,
+        20,
+        20,
+        32,
+      ),
       children: [
+        // Marca principal.
         Row(
           children: [
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    user != null
-                        ? 'Bienvenido, $name '
-                        : 'Bienvenido a CanchaYA',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    user != null
-                        ? 'Todo tu fútbol en un solo lugar.'
-                        : 'Organiza equipos, torneos y partidos fácilmente.',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: colors.onSurfaceVariant,
-                        ),
-                  ),
-                ],
+              child: Text(
+                'CanchaYA',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: colors.primary,
+                    ),
               ),
             ),
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: colors.primaryContainer,
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: colors.primaryContainer,
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Icon(
                 Icons.sports_soccer,
                 color: colors.primary,
@@ -74,18 +80,44 @@ class _HomeContent extends StatelessWidget {
           ],
         ),
 
+        const SizedBox(height: 20),
+
+        // Saludo.
+        Text(
+          user != null
+              ? 'Bienvenido $name '
+              : '',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+        ),
+
+        const SizedBox(height: 5),
+
+        Text(
+          user != null
+              ? 'Todo tu fútbol en un solo lugar.'
+              : 'Organiza equipos, torneos y partidos fácilmente.',
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+        ),
+
         const SizedBox(height: 24),
 
+        // Próximo partido.
         Container(
           padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
                 colors.primary,
-                colors.primary.withValues(alpha: 0.78),
+                colors.primary.withValues(
+                  alpha: 0.78,
+                ),
               ],
             ),
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(26),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -93,9 +125,12 @@ class _HomeContent extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    width: 46,
+                    height: 46,
                     decoration: BoxDecoration(
-                      color: colors.onPrimary.withValues(alpha: 0.15),
+                      color: colors.onPrimary.withValues(
+                        alpha: 0.15,
+                      ),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Icon(
@@ -107,48 +142,56 @@ class _HomeContent extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
-                      vertical: 6,
+                      vertical: 7,
                     ),
                     decoration: BoxDecoration(
-                      color: colors.onPrimary.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(20),
+                      color: colors.onPrimary.withValues(
+                        alpha: 0.15,
+                      ),
+                      borderRadius: BorderRadius.circular(100),
                     ),
                     child: Text(
                       'PRÓXIMO PARTIDO',
                       style: TextStyle(
                         color: colors.onPrimary,
-                        fontWeight: FontWeight.w700,
                         fontSize: 11,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
                 ],
               ),
+
               const SizedBox(height: 20),
+
               Text(
                 'Aún no tienes partidos programados',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       color: colors.onPrimary,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w900,
                     ),
               ),
+
               const SizedBox(height: 8),
+
               Text(
-                'Cuando formes parte de un equipo o torneo, aquí aparecerá tu siguiente partido.',
+                'Cuando tu equipo tenga un partido programado, aquí aparecerán la fecha, hora, cancha y rival.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: colors.onPrimary.withValues(alpha: 0.9),
+                      color: colors.onPrimary.withValues(
+                        alpha: 0.90,
+                      ),
                     ),
               ),
             ],
           ),
         ),
 
-        const SizedBox(height: 26),
+        const SizedBox(height: 28),
 
         Text(
           'Tu actividad',
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w900,
               ),
         ),
 
@@ -165,7 +208,7 @@ class _HomeContent extends StatelessWidget {
                 iconColor: colors.primary,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
               child: _SummaryCard(
                 icon: Icons.emoji_events_outlined,
@@ -175,7 +218,7 @@ class _HomeContent extends StatelessWidget {
                 iconColor: colors.secondary,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
               child: _SummaryCard(
                 icon: Icons.sports_soccer_outlined,
@@ -191,66 +234,51 @@ class _HomeContent extends StatelessWidget {
         const SizedBox(height: 28),
 
         Text(
-          'Accesos rápidos',
+          'CanchaYA',
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w900,
               ),
         ),
 
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
 
-        _QuickAction(
+        // Equipo
+        _InformationCard(
           icon: Icons.groups_2_outlined,
-          title: 'Mi equipo',
-          subtitle: 'Crea un equipo o únete mediante invitación.',
-          onTap: () {
-            _showComingSoon(
-              context,
-              'La administración de equipos será el siguiente módulo.',
-            );
-          },
+          title: 'Tu equipo',
+          description: user == null
+              ? 'Inicia sesión para consultar tu equipo.'
+              : 'Cuando un encargado te invite a un equipo, podrás aceptar o rechazar la invitación desde tu Perfil.',
         ),
 
         const SizedBox(height: 10),
 
-        _QuickAction(
+        // Torneos
+        const _InformationCard(
           icon: Icons.emoji_events_outlined,
           title: 'Torneos',
-          subtitle: 'Explora competencias y consulta tus torneos.',
-          onTap: () {
-            _showComingSoon(
-              context,
-              'Próximamente podrás consultar torneos reales.',
-            );
-          },
+          description:
+              'Consulta competencias, jornadas, resultados y clasificación desde la sección Torneos.',
         ),
 
         const SizedBox(height: 10),
 
-        _QuickAction(
+        // Tabla
+        const _InformationCard(
           icon: Icons.table_chart_outlined,
           title: 'Tabla de posiciones',
-          subtitle: 'PJ, PG, PE, PP, GF, GC, DG y puntos.',
-          onTap: () {
-            _showComingSoon(
-              context,
-              'La tabla estará disponible cuando conectemos los torneos.',
-            );
-          },
+          description:
+              'PJ, PG, PE, PP, GF, GC, DG y puntos estarán disponibles dentro de cada torneo.',
         ),
 
         const SizedBox(height: 10),
 
-        _QuickAction(
+        // Notificaciones
+        const _InformationCard(
           icon: Icons.notifications_none_outlined,
-          title: 'Notificaciones',
-          subtitle: 'Partidos, cambios de horario y recordatorios.',
-          onTap: () {
-            _showComingSoon(
-              context,
-              'Las notificaciones se conectarán más adelante.',
-            );
-          },
+          title: 'Recordatorios',
+          description:
+              'CanchaYA podrá avisarte sobre partidos, cambios de horario, sede y próximos encuentros.',
         ),
 
         const SizedBox(height: 28),
@@ -262,9 +290,11 @@ class _HomeContent extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
                   color: colors.primaryContainer,
                   borderRadius: BorderRadius.circular(14),
@@ -275,19 +305,21 @@ class _HomeContent extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 14),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       'Tu temporada empieza aquí',
                       style: TextStyle(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 5),
                     Text(
-                      'Crea o únete a un equipo para comenzar a participar en CanchaYA.',
+                      user == null
+                          ? 'Crea tu cuenta o inicia sesión para comenzar.'
+                          : 'No necesitas solicitar acceso a equipos. Cuando un encargado quiera agregarte, recibirás la invitación directamente en tu perfil.',
                     ),
                   ],
                 ),
@@ -296,17 +328,6 @@ class _HomeContent extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-
-  static void _showComingSoon(
-    BuildContext context,
-    String message,
-  ) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-      ),
     );
   }
 }
@@ -330,7 +351,7 @@ class _SummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: 10,
+        horizontal: 8,
         vertical: 16,
       ),
       decoration: BoxDecoration(
@@ -362,18 +383,16 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-class _QuickAction extends StatelessWidget {
-  const _QuickAction({
+class _InformationCard extends StatelessWidget {
+  const _InformationCard({
     required this.icon,
     required this.title,
-    required this.subtitle,
-    required this.onTap,
+    required this.description,
   });
 
   final IconData icon;
   final String title;
-  final String subtitle;
-  final VoidCallback onTap;
+  final String description;
 
   @override
   Widget build(BuildContext context) {
@@ -381,53 +400,45 @@ class _QuickAction extends StatelessWidget {
 
     return Card(
       elevation: 0,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 14,
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: colors.primaryContainer,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  icon,
-                  color: colors.primary,
-                ),
+      child: Padding(
+        padding: const EdgeInsets.all(17),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: colors.primaryContainer,
+                borderRadius: BorderRadius.circular(14),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                      ),
+              child: Icon(
+                icon,
+                color: colors.primary,
+              ),
+            ),
+
+            const SizedBox(width: 14),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              const Icon(
-                Icons.chevron_right,
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
