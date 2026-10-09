@@ -1,0 +1,967 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================================
+    // FUNCIONES GENERALES
+    // ============================================================
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn()
+        && request.auth.uid == userId;
+    }
+
+    function currentEmail() {
+      return isSignedIn()
+        && request.auth.token.email != null
+        ? request.auth.token.email.lower()
+        : '';
+    }
+
+    function isLeagueAdmin(leagueId) {
+      return isSignedIn()
+        && exists(
+          /databases/$(database)/documents/leagues/$(leagueId)
+        )
+        && request.auth.uid in get(
+          /databases/$(database)/documents/leagues/$(leagueId)
+        ).data.adminUserIds;
+    }
+
+    function teamExists(teamId) {
+      return exists(
+        /databases/$(database)/documents/teams/$(teamId)
+      );
+    }
+
+    function teamData(teamId) {
+      return get(
+        /databases/$(database)/documents/teams/$(teamId)
+      ).data;
+    }
+
+    function isTeamManagerFromTeamDocument(teamId) {
+      return isSignedIn()
+        && teamExists(teamId)
+        && request.auth.uid
+          in teamData(teamId).managerUserIds;
+    }
+
+    // El Admin de Liga puede administrar
+    // invitaciones a encargados.
+    //
+    // Para invitaciones a jugadores también
+    // puede hacerlo el encargado real del equipo.
+    function canManageJoinCode(
+      teamId,
+      leagueId,
+      purpose
+    ) {
+      return (
+        purpose == 'managerInvitation'
+        && isLeagueAdmin(leagueId)
+      )
+      ||
+      (
+        purpose == 'playerInvitation'
+        && (
+          isLeagueAdmin(leagueId)
+          ||
+          isTeamManagerFromTeamDocument(teamId)
+        )
+      )
+      ||
+      (
+        // Compatibilidad con posibles documentos
+        // antiguos. No se permite CREAR nuevos
+        // códigos de estos tipos.
+        (
+          purpose == 'teamCreation'
+          ||
+          purpose == 'manualRegeneration'
+        )
+        && isLeagueAdmin(leagueId)
+      );
+    }
+
+    // ============================================================
+    // USUARIOS
+    // ============================================================
+
+    match /users/{userId} {
+
+      allow read: if isOwner(userId);
+
+      // Toda cuenta nueva comienza como jugador.
+      allow create: if isOwner(userId)
+        && request.resource.data.role == 'player'
+        && request.resource.data.adminScope == 'none'
+        && request.resource.data.status == 'active';
+
+      // El usuario normal solamente modifica
+      // sus datos personales.
+      allow update: if isOwner(userId)
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'displayName',
+            'phone',
+            'position',
+            'updatedAt'
+          ]);
+
+      allow delete: if false;
+    }
+
+    // ============================================================
+    // LIGAS
+    // ============================================================
+
+    match /leagues/{leagueId} {
+
+      allow read: if isSignedIn()
+        && request.auth.uid
+          in resource.data.adminUserIds;
+
+      // La administración de ligas se habilitará
+      // para Admin de Plataforma.
+      allow create, update, delete: if false;
+    }
+
+    // ============================================================
+    // TORNEOS
+    // ============================================================
+
+    match /tournaments/{tournamentId} {
+
+      allow read: if isSignedIn()
+        && isLeagueAdmin(
+          resource.data.leagueId
+        );
+
+      allow create: if isSignedIn()
+        && request.resource.data.leagueId is string
+        && isLeagueAdmin(
+          request.resource.data.leagueId
+        )
+        && request.resource.data.createdByUserId
+          == request.auth.uid
+        && request.resource.data.status
+          == 'draft'
+        && request.resource.data.name is string
+        && request.resource.data.category is string
+        && request.resource.data.city is string
+        && request.resource.data.format is string;
+
+      allow update: if isSignedIn()
+        && isLeagueAdmin(
+          resource.data.leagueId
+        )
+        && request.resource.data.leagueId
+          == resource.data.leagueId
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'name',
+            'category',
+            'city',
+            'season',
+            'format',
+            'status',
+            'updatedAt'
+          ]);
+
+      allow delete: if false;
+    }
+
+    // ============================================================
+    // EQUIPOS
+    // ============================================================
+
+    match /teams/{teamId} {
+
+      // Puede leer:
+      // - Admin de Liga
+      // - Encargado registrado
+      // - Jugador registrado
+      allow read: if isSignedIn()
+        && (
+          isLeagueAdmin(
+            resource.data.leagueId
+          )
+          ||
+          request.auth.uid
+            in resource.data.managerUserIds
+          ||
+          request.auth.uid
+            in resource.data.playerUserIds
+        );
+
+      // Solo Admin de Liga crea equipos.
+      allow create: if isSignedIn()
+        && request.resource.data.leagueId is string
+        && isLeagueAdmin(
+          request.resource.data.leagueId
+        )
+        && request.resource.data.createdByUserId
+          == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.tournamentId is string
+        && request.resource.data.status == 'active'
+        && request.resource.data.managerUserIds is list
+        && request.resource.data.playerUserIds is list;
+
+      // ----------------------------------------------------------
+      // ADMIN DE LIGA
+      // ----------------------------------------------------------
+
+      allow update: if isSignedIn()
+
+        && isLeagueAdmin(
+          resource.data.leagueId
+        )
+
+        && request.resource.data.leagueId
+          == resource.data.leagueId
+
+        && request.resource.data.tournamentId
+          == resource.data.tournamentId
+
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'name',
+            'logoUrl',
+            'uniformDescription',
+            'managerUserIds',
+            'playerUserIds',
+            'status',
+            'lastManagerAssignmentId',
+            'updatedAt'
+          ]);
+
+      // ----------------------------------------------------------
+      // ENCARGADO YA REGISTRADO
+      // ----------------------------------------------------------
+
+      allow update: if isSignedIn()
+
+        && request.auth.uid
+          in resource.data.managerUserIds
+
+        && request.resource.data.leagueId
+          == resource.data.leagueId
+
+        && request.resource.data.tournamentId
+          == resource.data.tournamentId
+
+        && request.resource.data.managerUserIds
+          == resource.data.managerUserIds
+
+        && request.resource.data.playerUserIds
+          == resource.data.playerUserIds
+
+        && request.resource.data.status
+          == resource.data.status
+
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'name',
+            'logoUrl',
+            'uniformDescription',
+            'updatedAt'
+          ]);
+
+      // ----------------------------------------------------------
+      // PRIMER ENLACE DEL ENCARGADO AL EQUIPO
+      // ----------------------------------------------------------
+
+      allow update: if isSignedIn()
+
+        && request.resource.data.leagueId
+          == resource.data.leagueId
+
+        && request.resource.data.tournamentId
+          == resource.data.tournamentId
+
+        && resource.data.managerUserIds is list
+
+        && request.resource.data.managerUserIds is list
+
+        && !(request.auth.uid
+          in resource.data.managerUserIds)
+
+        && request.auth.uid
+          in request.resource.data.managerUserIds
+
+        && request.resource.data.managerUserIds
+          .hasAll(resource.data.managerUserIds)
+
+        && request.resource.data.managerUserIds.size()
+          == resource.data.managerUserIds.size() + 1
+
+        && request.resource.data.lastManagerAssignmentId
+          is string
+
+        && exists(
+          /databases/$(database)/documents/teamAssignments/$(request.resource.data.lastManagerAssignmentId)
+        )
+
+        && get(
+          /databases/$(database)/documents/teamAssignments/$(request.resource.data.lastManagerAssignmentId)
+        ).data.userId
+          == request.auth.uid
+
+        && get(
+          /databases/$(database)/documents/teamAssignments/$(request.resource.data.lastManagerAssignmentId)
+        ).data.teamId
+          == teamId
+
+        && get(
+          /databases/$(database)/documents/teamAssignments/$(request.resource.data.lastManagerAssignmentId)
+        ).data.leagueId
+          == resource.data.leagueId
+
+        && get(
+          /databases/$(database)/documents/teamAssignments/$(request.resource.data.lastManagerAssignmentId)
+        ).data.tournamentId
+          == resource.data.tournamentId
+
+        && get(
+          /databases/$(database)/documents/teamAssignments/$(request.resource.data.lastManagerAssignmentId)
+        ).data.role
+          == 'teamManager'
+
+        && get(
+          /databases/$(database)/documents/teamAssignments/$(request.resource.data.lastManagerAssignmentId)
+        ).data.status
+          == 'active'
+
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'managerUserIds',
+            'lastManagerAssignmentId',
+            'updatedAt'
+          ]);
+
+      allow delete: if false;
+    }
+
+    // ============================================================
+    // CÓDIGOS DE INVITACIÓN
+    // ============================================================
+
+    match /teamJoinCodes/{codeId} {
+
+      // Quien conoce el código puede consultarlo
+      // estando autenticado.
+      //
+      // No se permite enumerar la colección.
+      allow get: if isSignedIn();
+
+      allow list: if false;
+
+      // ----------------------------------------------------------
+      // CREAR INVITACIÓN
+      // ----------------------------------------------------------
+
+      allow create: if isSignedIn()
+
+        // Todos los campos esperados deben existir.
+        && request.resource.data.keys().hasAll([
+          'teamId',
+          'leagueId',
+          'tournamentId',
+          'code',
+          'status',
+          'purpose',
+          'delivery',
+          'createdByUserId',
+          'invitedUserId',
+          'invitedEmail',
+          'usedByUserId',
+          'createdAt',
+          'usedAt',
+          'revokedAt',
+          'expiresAt',
+          'updatedAt',
+          'revokedByUserId'
+        ])
+
+        // No aceptamos campos inesperados.
+        && request.resource.data.keys().hasOnly([
+          'teamId',
+          'leagueId',
+          'tournamentId',
+          'code',
+          'status',
+          'purpose',
+          'delivery',
+          'createdByUserId',
+          'invitedUserId',
+          'invitedEmail',
+          'usedByUserId',
+          'createdAt',
+          'usedAt',
+          'revokedAt',
+          'expiresAt',
+          'updatedAt',
+          'revokedByUserId'
+        ])
+
+        // El documento utiliza el propio código como ID.
+        // Como los documentos nunca se eliminan,
+        // un código antiguo jamás puede reciclarse.
+        && request.resource.data.code == codeId
+
+        && request.resource.data.teamId is string
+
+        && request.resource.data.leagueId is string
+
+        && request.resource.data.tournamentId is string
+
+        && request.resource.data.createdByUserId
+          == request.auth.uid
+
+        && request.resource.data.status
+          == 'active'
+
+        // A partir de ahora solamente creamos
+        // estos dos tipos de acceso.
+        && request.resource.data.purpose
+          in [
+            'managerInvitation',
+            'playerInvitation'
+          ]
+
+        // Solamente estas dos formas de entrega.
+        && request.resource.data.delivery
+          in [
+            'qr',
+            'email'
+          ]
+
+        // Un acceso nuevo todavía no ha sido usado.
+        && request.resource.data.usedByUserId == null
+
+        && request.resource.data.usedAt == null
+
+        && request.resource.data.revokedAt == null
+
+        && request.resource.data.revokedByUserId == null
+
+        // Por ahora no utilizamos vencimiento automático.
+        && request.resource.data.expiresAt == null
+
+        // Los timestamps vienen del servidor.
+        && request.resource.data.createdAt
+          == request.time
+
+        && request.resource.data.updatedAt
+          == request.time
+
+        // El equipo debe existir.
+        && teamExists(
+          request.resource.data.teamId
+        )
+
+        // El código no puede apuntar a otra liga.
+        && teamData(
+          request.resource.data.teamId
+        ).leagueId
+          == request.resource.data.leagueId
+
+        // Tampoco puede apuntar a otro torneo.
+        && teamData(
+          request.resource.data.teamId
+        ).tournamentId
+          == request.resource.data.tournamentId
+
+        // --------------------------------------------------------
+        // AUTORIDAD SEGÚN TIPO DE INVITACIÓN
+        // --------------------------------------------------------
+
+        && (
+          // Un encargado solamente puede ser
+          // invitado por Admin de Liga.
+          (
+            request.resource.data.purpose
+              == 'managerInvitation'
+
+            && isLeagueAdmin(
+              request.resource.data.leagueId
+            )
+          )
+
+          ||
+
+          // Un jugador puede ser invitado por
+          // Admin de Liga o encargado del equipo.
+          (
+            request.resource.data.purpose
+              == 'playerInvitation'
+
+            && (
+              isLeagueAdmin(
+                request.resource.data.leagueId
+              )
+
+              ||
+
+              isTeamManagerFromTeamDocument(
+                request.resource.data.teamId
+              )
+            )
+          )
+        )
+
+        // --------------------------------------------------------
+        // ENTREGA PRESENCIAL
+        // --------------------------------------------------------
+
+        && (
+          (
+            request.resource.data.delivery == 'qr'
+
+            // El QR presencial todavía no pertenece
+            // a una persona concreta.
+            && request.resource.data.invitedUserId == null
+
+            && request.resource.data.invitedEmail == null
+          )
+
+          ||
+
+          // ------------------------------------------------------
+          // ENTREGA POR CORREO
+          // ------------------------------------------------------
+
+          (
+            request.resource.data.delivery == 'email'
+
+            && request.resource.data.invitedEmail is string
+
+            && request.resource.data.invitedEmail
+              == request.resource.data.invitedEmail.lower()
+
+            && request.resource.data.invitedEmail.size() > 3
+
+            && (
+              request.resource.data.invitedUserId == null
+
+              ||
+
+              request.resource.data.invitedUserId is string
+            )
+          )
+        );
+
+      // ----------------------------------------------------------
+      // ACTUALIZAR INVITACIÓN
+      // ----------------------------------------------------------
+
+      allow update: if isSignedIn()
+
+        // Estos campos nunca pueden cambiar.
+        && request.resource.data.code
+          == resource.data.code
+
+        && request.resource.data.teamId
+          == resource.data.teamId
+
+        && request.resource.data.leagueId
+          == resource.data.leagueId
+
+        && request.resource.data.tournamentId
+          == resource.data.tournamentId
+
+        && request.resource.data.purpose
+          == resource.data.purpose
+
+        && request.resource.data.delivery
+          == resource.data.delivery
+
+        && request.resource.data.createdByUserId
+          == resource.data.createdByUserId
+
+        && request.resource.data.invitedUserId
+          == resource.data.invitedUserId
+
+        && request.resource.data.invitedEmail
+          == resource.data.invitedEmail
+
+        && request.resource.data.createdAt
+          == resource.data.createdAt
+
+        && request.resource.data.expiresAt
+          == resource.data.expiresAt
+
+        && (
+
+          // ======================================================
+          // REVOCAR INVITACIÓN
+          // ======================================================
+
+          (
+            resource.data.status == 'active'
+
+            && request.resource.data.status
+              == 'revoked'
+
+            && canManageJoinCode(
+              resource.data.teamId,
+              resource.data.leagueId,
+              resource.data.purpose
+            )
+
+            && request.resource.data.revokedByUserId
+              == request.auth.uid
+
+            && request.resource.data.revokedAt
+              == request.time
+
+            && request.resource.data.updatedAt
+              == request.time
+
+            && request.resource.data
+              .diff(resource.data)
+              .affectedKeys()
+              .hasOnly([
+                'status',
+                'revokedAt',
+                'revokedByUserId',
+                'updatedAt'
+              ])
+          )
+
+          ||
+
+          // ======================================================
+          // UTILIZAR INVITACIÓN
+          // ======================================================
+
+          (
+            resource.data.status == 'active'
+
+            && request.resource.data.status
+              == 'used'
+
+            // Nadie puede marcar un código como
+            // utilizado por otra persona.
+            && request.resource.data.usedByUserId
+              == request.auth.uid
+
+            && request.resource.data.usedAt
+              == request.time
+
+            && request.resource.data.updatedAt
+              == request.time
+
+            // Si estaba ligado a un UID,
+            // solamente ese UID puede utilizarlo.
+            && (
+              resource.data.invitedUserId == null
+
+              ||
+
+              resource.data.invitedUserId == ''
+
+              ||
+
+              resource.data.invitedUserId
+                == request.auth.uid
+            )
+
+            // Si fue enviado por correo,
+            // solamente esa cuenta puede utilizarlo.
+            && (
+              resource.data.invitedEmail == null
+
+              ||
+
+              resource.data.invitedEmail == ''
+
+              ||
+
+              resource.data.invitedEmail
+                == currentEmail()
+            )
+
+            && request.resource.data
+              .diff(resource.data)
+              .affectedKeys()
+              .hasOnly([
+                'status',
+                'usedByUserId',
+                'usedAt',
+                'updatedAt'
+              ])
+          )
+        );
+
+      // Ningún código de CanchaYA se elimina.
+      allow delete: if false;
+    }
+
+    // ============================================================
+    // INVITACIONES A ENCARGADO
+    // ============================================================
+
+    match /teamManagerInvitations/{invitationId} {
+
+      // Puede consultar:
+      // - usuario invitado por correo
+      // - Admin de Liga
+      allow read: if isSignedIn()
+        && (
+          resource.data.invitedEmail
+            == currentEmail()
+
+          ||
+
+          isLeagueAdmin(
+            resource.data.leagueId
+          )
+        );
+
+      // Admin de Liga crea la invitación.
+      allow create: if isSignedIn()
+
+        && request.resource.data.teamId is string
+
+        && request.resource.data.teamName is string
+
+        && request.resource.data.leagueId is string
+
+        && request.resource.data.tournamentId is string
+
+        && request.resource.data.invitedEmail is string
+
+        && request.resource.data.invitedEmail
+          == request.resource.data.invitedEmail.lower()
+
+        && request.resource.data.invitedByUserId
+          == request.auth.uid
+
+        && request.resource.data.invitedUserId == ''
+
+        && request.resource.data.status == 'pending'
+
+        && isLeagueAdmin(
+          request.resource.data.leagueId
+        )
+
+        && teamExists(
+          request.resource.data.teamId
+        )
+
+        && teamData(
+          request.resource.data.teamId
+        ).leagueId
+          == request.resource.data.leagueId
+
+        && teamData(
+          request.resource.data.teamId
+        ).tournamentId
+          == request.resource.data.tournamentId;
+
+      // Usuario invitado acepta o rechaza.
+      allow update: if isSignedIn()
+
+        && resource.data.invitedEmail
+          == currentEmail()
+
+        && resource.data.status == 'pending'
+
+        && request.resource.data.teamId
+          == resource.data.teamId
+
+        && request.resource.data.teamName
+          == resource.data.teamName
+
+        && request.resource.data.leagueId
+          == resource.data.leagueId
+
+        && request.resource.data.tournamentId
+          == resource.data.tournamentId
+
+        && request.resource.data.invitedEmail
+          == resource.data.invitedEmail
+
+        && request.resource.data.invitedByUserId
+          == resource.data.invitedByUserId
+
+        && request.resource.data.invitedUserId
+          == request.auth.uid
+
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'status',
+            'invitedUserId',
+            'acceptedAt',
+            'rejectedAt',
+            'updatedAt'
+          ])
+
+        && (
+
+          // ------------------------------------------------------
+          // ACEPTAR
+          // ------------------------------------------------------
+
+          (
+            request.resource.data.status
+              == 'active'
+
+            && existsAfter(
+              /databases/$(database)/documents/teamAssignments/$(invitationId)
+            )
+
+            && getAfter(
+              /databases/$(database)/documents/teamAssignments/$(invitationId)
+            ).data.userId
+              == request.auth.uid
+
+            && getAfter(
+              /databases/$(database)/documents/teamAssignments/$(invitationId)
+            ).data.userEmail
+              == currentEmail()
+
+            && getAfter(
+              /databases/$(database)/documents/teamAssignments/$(invitationId)
+            ).data.teamId
+              == resource.data.teamId
+
+            && getAfter(
+              /databases/$(database)/documents/teamAssignments/$(invitationId)
+            ).data.leagueId
+              == resource.data.leagueId
+
+            && getAfter(
+              /databases/$(database)/documents/teamAssignments/$(invitationId)
+            ).data.tournamentId
+              == resource.data.tournamentId
+
+            && getAfter(
+              /databases/$(database)/documents/teamAssignments/$(invitationId)
+            ).data.role
+              == 'teamManager'
+
+            && getAfter(
+              /databases/$(database)/documents/teamAssignments/$(invitationId)
+            ).data.status
+              == 'active'
+          )
+
+          ||
+
+          // ------------------------------------------------------
+          // RECHAZAR
+          // ------------------------------------------------------
+
+          (
+            request.resource.data.status
+              == 'rejected'
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    // ============================================================
+    // ASIGNACIONES DE EQUIPO
+    // ============================================================
+
+    match /teamAssignments/{assignmentId} {
+
+      // Usuario consulta sus propias asignaciones.
+      allow read: if isSignedIn()
+        && resource.data.userId
+          == request.auth.uid;
+
+      // Se crea únicamente al aceptar una
+      // invitación legítima de encargado.
+      allow create: if isSignedIn()
+
+        && exists(
+          /databases/$(database)/documents/teamManagerInvitations/$(assignmentId)
+        )
+
+        && get(
+          /databases/$(database)/documents/teamManagerInvitations/$(assignmentId)
+        ).data.invitedEmail
+          == currentEmail()
+
+        && get(
+          /databases/$(database)/documents/teamManagerInvitations/$(assignmentId)
+        ).data.status
+          == 'pending'
+
+        && getAfter(
+          /databases/$(database)/documents/teamManagerInvitations/$(assignmentId)
+        ).data.status
+          == 'active'
+
+        && getAfter(
+          /databases/$(database)/documents/teamManagerInvitations/$(assignmentId)
+        ).data.invitedUserId
+          == request.auth.uid
+
+        && request.resource.data.userId
+          == request.auth.uid
+
+        && request.resource.data.userEmail
+          == currentEmail()
+
+        && request.resource.data.teamId
+          == get(
+            /databases/$(database)/documents/teamManagerInvitations/$(assignmentId)
+          ).data.teamId
+
+        && request.resource.data.leagueId
+          == get(
+            /databases/$(database)/documents/teamManagerInvitations/$(assignmentId)
+          ).data.leagueId
+
+        && request.resource.data.tournamentId
+          == get(
+            /databases/$(database)/documents/teamManagerInvitations/$(assignmentId)
+          ).data.tournamentId
+
+        && request.resource.data.assignedByUserId
+          == get(
+            /databases/$(database)/documents/teamManagerInvitations/$(assignmentId)
+          ).data.invitedByUserId
+
+        && request.resource.data.role
+          == 'teamManager'
+
+        && request.resource.data.status
+          == 'active';
+
+      allow update, delete: if false;
+    }
+
+    // ============================================================
+    // TODO LO DEMÁS BLOQUEADO
+    // ============================================================
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

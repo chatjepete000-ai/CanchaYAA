@@ -47,6 +47,49 @@ class TeamRepository {
         );
   }
 
+  Stream<Team?> watchTeamById(String teamId) {
+    final cleanTeamId = teamId.trim();
+
+    if (cleanTeamId.isEmpty) {
+      return Stream<Team?>.value(null);
+    }
+
+    return _teams.doc(cleanTeamId).snapshots().map(
+      (snapshot) {
+        final data = snapshot.data();
+
+        if (!snapshot.exists || data == null) {
+          return null;
+        }
+
+        return Team.fromMap(
+          snapshot.id,
+          data,
+        );
+      },
+    );
+  }
+
+  Future<Team?> getTeamById(String teamId) async {
+    final cleanTeamId = teamId.trim();
+
+    if (cleanTeamId.isEmpty) {
+      return null;
+    }
+
+    final snapshot = await _teams.doc(cleanTeamId).get();
+    final data = snapshot.data();
+
+    if (!snapshot.exists || data == null) {
+      return null;
+    }
+
+    return Team.fromMap(
+      snapshot.id,
+      data,
+    );
+  }
+
   Stream<List<TeamAssignment>>
       watchActiveAssignmentsForCurrentUser() {
     final user = _auth.currentUser;
@@ -273,8 +316,6 @@ class TeamRepository {
       invitation.id,
     );
 
-    // La asignación usa exactamente el mismo ID
-    // que la invitación.
     final assignmentRef =
         _assignments.doc(
       invitation.id,
@@ -344,11 +385,6 @@ class TeamRepository {
               invitation.invitedByUserId,
         );
 
-        // IMPORTANTE:
-        // Ya no hacemos transaction.get(assignmentRef).
-        //
-        // Intentamos crear directamente.
-        // Si ya existiera, las reglas bloquearán la actualización.
         transaction.set(
           assignmentRef,
           {
@@ -377,6 +413,137 @@ class TeamRepository {
         );
       },
     );
+
+    await ensureManagerLinkedToTeam(
+      assignmentId: invitation.id,
+      teamId: invitation.teamId,
+    );
+  }
+
+  Future<void> ensureManagerLinkedToTeam({
+    required String assignmentId,
+    required String teamId,
+  }) async {
+    final user = _auth.currentUser;
+
+    if (user == null) {
+      throw StateError(
+        'Debes iniciar sesión.',
+      );
+    }
+
+    final cleanAssignmentId =
+        assignmentId.trim();
+
+    final cleanTeamId =
+        teamId.trim();
+
+    if (cleanAssignmentId.isEmpty ||
+        cleanTeamId.isEmpty) {
+      throw ArgumentError(
+        'La asignación o el equipo no son válidos.',
+      );
+    }
+
+    final teamRef =
+        _teams.doc(cleanTeamId);
+
+    try {
+      /*
+       * No leemos primero el equipo.
+       *
+       * Antes de estar dentro de managerUserIds el
+       * encargado todavía no tiene permiso para leerlo.
+       *
+       * Las reglas de Firestore validan que esta
+       * asignación exista, esté activa y pertenezca
+       * al usuario actual.
+       */
+      await teamRef.update(
+        {
+          'managerUserIds':
+              FieldValue.arrayUnion([
+            user.uid,
+          ]),
+          'lastManagerAssignmentId':
+              cleanAssignmentId,
+          'updatedAt':
+              FieldValue.serverTimestamp(),
+        },
+      );
+    } on FirebaseException {
+      /*
+       * Si ya estaba vinculado, la regla especial de
+       * "agregar encargado" puede rechazar una segunda
+       * actualización porque ya no hay nada que agregar.
+       *
+       * En ese caso intentamos leer el equipo.
+       * Si ahora podemos leerlo y nuestro UID ya aparece,
+       * consideramos la sincronización completada.
+       */
+      try {
+        final snapshot =
+            await teamRef.get();
+
+        final data =
+            snapshot.data();
+
+        if (snapshot.exists && data != null) {
+          final managerUserIds =
+              List<String>.from(
+            data['managerUserIds']
+                    as List<dynamic>? ??
+                const <dynamic>[],
+          );
+
+          if (managerUserIds.contains(user.uid)) {
+            return;
+          }
+        }
+      } catch (_) {
+        // Conservamos el error original.
+      }
+
+      rethrow;
+    }
+  }
+
+  Future<void> syncCurrentManagerAssignments() async {
+    final user = _auth.currentUser;
+
+    if (user == null) {
+      return;
+    }
+
+    final snapshot = await _assignments
+        .where(
+          'userId',
+          isEqualTo: user.uid,
+        )
+        .get();
+
+    final assignments = snapshot.docs
+        .map(
+          (doc) => TeamAssignment.fromMap(
+            doc.id,
+            doc.data(),
+          ),
+        )
+        .where(
+          (assignment) =>
+              assignment.status ==
+                  AssignmentStatus.active &&
+              assignment.role ==
+                  TeamAssignmentRole.teamManager,
+        )
+        .toList();
+
+    for (final assignment in assignments) {
+      await ensureManagerLinkedToTeam(
+        assignmentId: assignment.id,
+        teamId: assignment.teamId,
+      );
+    }
   }
 
   Future<void> rejectManagerInvitation(

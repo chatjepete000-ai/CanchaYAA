@@ -3,9 +3,29 @@ import 'package:flutter/material.dart';
 
 import '../data/team_repository.dart';
 import '../domain/team_models.dart';
+import 'team_manager_screen.dart';
 
-class TeamsScreen extends StatelessWidget {
+class TeamsScreen extends StatefulWidget {
   const TeamsScreen({super.key});
+
+  @override
+  State<TeamsScreen> createState() => _TeamsScreenState();
+}
+
+class _TeamsScreenState extends State<TeamsScreen> {
+  late final TeamRepository _repository;
+  Future<void>? _syncFuture;
+
+  @override
+  void initState() {
+    super.initState();
+
+    if (Firebase.apps.isNotEmpty) {
+      _repository = TeamRepository();
+      _syncFuture =
+          _repository.syncCurrentManagerAssignments();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -13,10 +33,50 @@ class TeamsScreen extends StatelessWidget {
       return const _TeamsEmptyState();
     }
 
-    final repository = TeamRepository();
+    return FutureBuilder<void>(
+      future: _syncFuture,
+      builder: (context, syncSnapshot) {
+        if (syncSnapshot.connectionState ==
+            ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
 
+        if (syncSnapshot.hasError) {
+          return _SyncErrorState(
+            error: syncSnapshot.error,
+            onRetry: _retrySync,
+          );
+        }
+
+        return _TeamsStreams(
+          repository: _repository,
+        );
+      },
+    );
+  }
+
+  void _retrySync() {
+    setState(() {
+      _syncFuture =
+          _repository.syncCurrentManagerAssignments();
+    });
+  }
+}
+
+class _TeamsStreams extends StatelessWidget {
+  const _TeamsStreams({
+    required this.repository,
+  });
+
+  final TeamRepository repository;
+
+  @override
+  Widget build(BuildContext context) {
     return StreamBuilder<List<TeamAssignment>>(
-      stream: repository.watchActiveAssignmentsForCurrentUser(),
+      stream:
+          repository.watchActiveAssignmentsForCurrentUser(),
       builder: (context, assignmentSnapshot) {
         if (assignmentSnapshot.connectionState ==
                 ConnectionState.waiting &&
@@ -29,12 +89,14 @@ class TeamsScreen extends StatelessWidget {
         if (assignmentSnapshot.hasError) {
           return _TeamsError(
             message:
-                'No se pudieron cargar tus asignaciones.\n${assignmentSnapshot.error}',
+                'No se pudieron cargar tus asignaciones.\n'
+                '${assignmentSnapshot.error}',
           );
         }
 
         final assignments =
-            assignmentSnapshot.data ?? const <TeamAssignment>[];
+            assignmentSnapshot.data ??
+                const <TeamAssignment>[];
 
         final managerAssignments = assignments
             .where(
@@ -44,9 +106,10 @@ class TeamsScreen extends StatelessWidget {
             )
             .toList();
 
-        return StreamBuilder<List<TeamManagerInvitation>>(
-          stream:
-              repository.watchPendingManagerInvitationsForCurrentUser(),
+        return StreamBuilder<
+            List<TeamManagerInvitation>>(
+          stream: repository
+              .watchPendingManagerInvitationsForCurrentUser(),
           builder: (context, invitationSnapshot) {
             if (invitationSnapshot.connectionState ==
                     ConnectionState.waiting &&
@@ -59,7 +122,8 @@ class TeamsScreen extends StatelessWidget {
             if (invitationSnapshot.hasError) {
               return _TeamsError(
                 message:
-                    'No se pudieron cargar tus invitaciones.\n${invitationSnapshot.error}',
+                    'No se pudieron cargar tus invitaciones.\n'
+                    '${invitationSnapshot.error}',
               );
             }
 
@@ -68,7 +132,8 @@ class TeamsScreen extends StatelessWidget {
                     const <TeamManagerInvitation>[];
 
             return _TeamsContent(
-              managerAssignments: managerAssignments,
+              managerAssignments:
+                  managerAssignments,
               invitations: invitations,
               repository: repository,
             );
@@ -105,23 +170,29 @@ class _TeamsContent extends StatelessWidget {
         Text(
           'Equipos',
           style:
-              Theme.of(context).textTheme.headlineSmall?.copyWith(
+              Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(
                     fontWeight: FontWeight.w900,
                   ),
         ),
         const SizedBox(height: 6),
         Text(
           'Consulta tus equipos, invitaciones y permisos activos.',
-          style: Theme.of(context).textTheme.bodyMedium,
+          style:
+              Theme.of(context).textTheme.bodyMedium,
         ),
-
         const SizedBox(height: 24),
 
         if (managerAssignments.isNotEmpty) ...[
           Text(
             'Equipos que administras',
             style:
-                Theme.of(context).textTheme.titleLarge?.copyWith(
+                Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(
                       fontWeight: FontWeight.w900,
                     ),
           ),
@@ -129,98 +200,13 @@ class _TeamsContent extends StatelessWidget {
 
           ...managerAssignments.map(
             (assignment) => Padding(
-              padding: const EdgeInsets.only(
-                bottom: 12,
-              ),
-              child: Card(
-                elevation: 0,
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 50,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              color:
-                                  colors.primaryContainer,
-                              borderRadius:
-                                  BorderRadius.circular(14),
-                            ),
-                            child: Icon(
-                              Icons.shield_outlined,
-                              color: colors.primary,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Equipo asignado',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium
-                                      ?.copyWith(
-                                        fontWeight:
-                                            FontWeight.w900,
-                                      ),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  'ID: ${assignment.teamId}',
-                                ),
-                              ],
-                            ),
-                          ),
-                          Chip(
-                            label: Text(
-                              assignment.role.label,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 18),
-
-                      Text(
-                        'Como encargado activo podrás administrar la plantilla, invitaciones, escudo, uniforme y configuración de este equipo.',
-                        style:
-                            Theme.of(context).textTheme.bodyMedium,
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: () {
-                            ScaffoldMessenger.of(context)
-                                .showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'La administración completa del equipo se conectará en el siguiente paso.',
-                                ),
-                              ),
-                            );
-                          },
-                          icon: const Icon(
-                            Icons.manage_accounts_outlined,
-                          ),
-                          label: const Text(
-                            'Administrar equipo',
-                          ),
-                        ),
-                      ),
-                    ],
+              padding:
+                  const EdgeInsets.only(
+                    bottom: 12,
                   ),
-                ),
+              child: _ManagedTeamCard(
+                assignment: assignment,
+                repository: repository,
               ),
             ),
           ),
@@ -231,18 +217,21 @@ class _TeamsContent extends StatelessWidget {
         Text(
           'Invitaciones',
           style:
-              Theme.of(context).textTheme.titleLarge?.copyWith(
+              Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(
                     fontWeight: FontWeight.w900,
                   ),
         ),
-
         const SizedBox(height: 12),
 
         if (invitations.isEmpty)
           Card(
             elevation: 0,
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding:
+                  const EdgeInsets.all(20),
               child: Row(
                 crossAxisAlignment:
                     CrossAxisAlignment.start,
@@ -250,10 +239,14 @@ class _TeamsContent extends StatelessWidget {
                   Container(
                     width: 48,
                     height: 48,
-                    decoration: BoxDecoration(
-                      color: colors.primaryContainer,
+                    decoration:
+                        BoxDecoration(
+                      color:
+                          colors.primaryContainer,
                       borderRadius:
-                          BorderRadius.circular(14),
+                          BorderRadius.circular(
+                            14,
+                          ),
                     ),
                     child: Icon(
                       Icons.mail_outline,
@@ -264,12 +257,14 @@ class _TeamsContent extends StatelessWidget {
                   const Expanded(
                     child: Column(
                       crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                          CrossAxisAlignment
+                              .start,
                       children: [
                         Text(
                           'Sin invitaciones pendientes',
                           style: TextStyle(
-                            fontWeight: FontWeight.w900,
+                            fontWeight:
+                                FontWeight.w900,
                           ),
                         ),
                         SizedBox(height: 5),
@@ -286,10 +281,12 @@ class _TeamsContent extends StatelessWidget {
         else
           ...invitations.map(
             (invitation) => Padding(
-              padding: const EdgeInsets.only(
-                bottom: 12,
-              ),
-              child: _ManagerInvitationCard(
+              padding:
+                  const EdgeInsets.only(
+                    bottom: 12,
+                  ),
+              child:
+                  _ManagerInvitationCard(
                 invitation: invitation,
                 repository: repository,
               ),
@@ -300,10 +297,13 @@ class _TeamsContent extends StatelessWidget {
 
         if (managerAssignments.isEmpty)
           Container(
-            padding: const EdgeInsets.all(18),
+            padding:
+                const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: colors.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(18),
+              color:
+                  colors.surfaceContainerHighest,
+              borderRadius:
+                  BorderRadius.circular(18),
             ),
             child: const Row(
               crossAxisAlignment:
@@ -326,7 +326,220 @@ class _TeamsContent extends StatelessWidget {
   }
 }
 
-class _ManagerInvitationCard extends StatefulWidget {
+class _ManagedTeamCard extends StatelessWidget {
+  const _ManagedTeamCard({
+    required this.assignment,
+    required this.repository,
+  });
+
+  final TeamAssignment assignment;
+  final TeamRepository repository;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return StreamBuilder<Team?>(
+      stream: repository.watchTeamById(
+        assignment.teamId,
+      ),
+      builder: (context, teamSnapshot) {
+        final team = teamSnapshot.data;
+
+        final loading =
+            teamSnapshot.connectionState ==
+                    ConnectionState.waiting &&
+                !teamSnapshot.hasData;
+
+        final hasError =
+            teamSnapshot.hasError;
+
+        String title =
+            'Equipo asignado';
+
+        String subtitle =
+            'ID: ${assignment.teamId}';
+
+        if (team != null) {
+          title = team.name;
+          subtitle =
+              '${team.totalPlayers} jugadores';
+        }
+
+        return Card(
+          elevation: 0,
+          child: Padding(
+            padding:
+                const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration:
+                          BoxDecoration(
+                        color:
+                            colors.primaryContainer,
+                        borderRadius:
+                            BorderRadius.circular(
+                              14,
+                            ),
+                      ),
+                      child: team != null &&
+                              team.logoUrl
+                                  .trim()
+                                  .isNotEmpty
+                          ? ClipRRect(
+                              borderRadius:
+                                  BorderRadius
+                                      .circular(
+                                14,
+                              ),
+                              child:
+                                  Image.network(
+                                team.logoUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder:
+                                    (
+                                  context,
+                                  error,
+                                  stackTrace,
+                                ) {
+                                  return Icon(
+                                    Icons
+                                        .shield_outlined,
+                                    color: colors
+                                        .primary,
+                                  );
+                                },
+                              ),
+                            )
+                          : Icon(
+                              Icons
+                                  .shield_outlined,
+                              color:
+                                  colors.primary,
+                            ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment
+                                .start,
+                        children: [
+                          Text(
+                            title,
+                            style: Theme.of(
+                              context,
+                            )
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  fontWeight:
+                                      FontWeight
+                                          .w900,
+                                ),
+                          ),
+                          const SizedBox(
+                            height: 3,
+                          ),
+                          Text(
+                            loading
+                                ? 'Cargando información...'
+                                : subtitle,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Chip(
+                      label: Text(
+                        assignment.role.label,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+
+                if (hasError) ...[
+                  Container(
+                    width:
+                        double.infinity,
+                    padding:
+                        const EdgeInsets.all(
+                          12,
+                        ),
+                    decoration:
+                        BoxDecoration(
+                      color:
+                          colors.errorContainer,
+                      borderRadius:
+                          BorderRadius.circular(
+                            12,
+                          ),
+                    ),
+                    child: Text(
+                      'Tu asignación está activa, pero todavía no se pudo cargar la información del equipo.',
+                      style: TextStyle(
+                        color: colors
+                            .onErrorContainer,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                const Text(
+                  'Como encargado activo podrás administrar la plantilla, invitaciones, escudo y uniforme de este equipo.',
+                ),
+
+                const SizedBox(height: 16),
+
+                SizedBox(
+                  width:
+                      double.infinity,
+                  child:
+                      FilledButton.icon(
+                    onPressed: team == null
+                        ? null
+                        : () {
+                            Navigator.of(
+                              context,
+                            ).push(
+                              MaterialPageRoute<
+                                  void>(
+                                builder:
+                                    (context) =>
+                                        TeamManagerScreen(
+                                  team: team,
+                                ),
+                              ),
+                            );
+                          },
+                    icon: const Icon(
+                      Icons
+                          .manage_accounts_outlined,
+                    ),
+                    label: const Text(
+                      'Administrar equipo',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ManagerInvitationCard
+    extends StatefulWidget {
   const _ManagerInvitationCard({
     required this.invitation,
     required this.repository,
@@ -336,8 +549,9 @@ class _ManagerInvitationCard extends StatefulWidget {
   final TeamRepository repository;
 
   @override
-  State<_ManagerInvitationCard> createState() =>
-      _ManagerInvitationCardState();
+  State<_ManagerInvitationCard>
+      createState() =>
+          _ManagerInvitationCardState();
 }
 
 class _ManagerInvitationCardState
@@ -350,7 +564,8 @@ class _ManagerInvitationCardState
     });
 
     try {
-      await widget.repository.acceptManagerInvitation(
+      await widget.repository
+          .acceptManagerInvitation(
         widget.invitation,
       );
 
@@ -358,7 +573,8 @@ class _ManagerInvitationCardState
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         const SnackBar(
           content: Text(
             'Invitación aceptada. Ahora eres encargado de este equipo.',
@@ -370,7 +586,8 @@ class _ManagerInvitationCardState
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         SnackBar(
           content: Text(
             'No se pudo aceptar la invitación: $error',
@@ -392,7 +609,8 @@ class _ManagerInvitationCardState
     });
 
     try {
-      await widget.repository.rejectManagerInvitation(
+      await widget.repository
+          .rejectManagerInvitation(
         widget.invitation,
       );
 
@@ -400,7 +618,8 @@ class _ManagerInvitationCardState
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         const SnackBar(
           content: Text(
             'Invitación rechazada.',
@@ -412,7 +631,8 @@ class _ManagerInvitationCardState
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         SnackBar(
           content: Text(
             'No se pudo rechazar la invitación: $error',
@@ -430,26 +650,35 @@ class _ManagerInvitationCardState
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final colors =
+        Theme.of(context).colorScheme;
 
     return Card(
       elevation: 0,
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding:
+            const EdgeInsets.all(18),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Container(
                   width: 48,
                   height: 48,
-                  decoration: BoxDecoration(
-                    color: colors.primaryContainer,
-                    borderRadius: BorderRadius.circular(14),
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        colors.primaryContainer,
+                    borderRadius:
+                        BorderRadius.circular(
+                          14,
+                        ),
                   ),
                   child: Icon(
-                    Icons.admin_panel_settings_outlined,
+                    Icons
+                        .admin_panel_settings_outlined,
                     color: colors.primary,
                   ),
                 ),
@@ -457,21 +686,31 @@ class _ManagerInvitationCardState
                 Expanded(
                   child: Column(
                     crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                        CrossAxisAlignment
+                            .start,
                     children: [
                       Text(
-                        widget.invitation.teamName.isNotEmpty
-                            ? widget.invitation.teamName
+                        widget.invitation
+                                .teamName
+                                .isNotEmpty
+                            ? widget
+                                .invitation
+                                .teamName
                             : 'Equipo',
-                        style: Theme.of(context)
+                        style: Theme.of(
+                          context,
+                        )
                             .textTheme
                             .titleMedium
                             ?.copyWith(
                               fontWeight:
-                                  FontWeight.w900,
+                                  FontWeight
+                                      .w900,
                             ),
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(
+                        height: 3,
+                      ),
                       const Text(
                         'Invitación para ser encargado',
                       ),
@@ -492,10 +731,14 @@ class _ManagerInvitationCardState
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton(
+                  child:
+                      OutlinedButton(
                     onPressed:
-                        _processing ? null : _reject,
-                    child: const Text(
+                        _processing
+                            ? null
+                            : _reject,
+                    child:
+                        const Text(
                       'Rechazar',
                     ),
                   ),
@@ -504,7 +747,9 @@ class _ManagerInvitationCardState
                 Expanded(
                   child: FilledButton(
                     onPressed:
-                        _processing ? null : _accept,
+                        _processing
+                            ? null
+                            : _accept,
                     child: Text(
                       _processing
                           ? 'Procesando...'
@@ -521,25 +766,121 @@ class _ManagerInvitationCardState
   }
 }
 
+class _SyncErrorState extends StatelessWidget {
+  const _SyncErrorState({
+    required this.error,
+    required this.onRetry,
+  });
+
+  final Object? error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).colorScheme;
+
+    return ListView(
+      padding:
+          const EdgeInsets.all(20),
+      children: [
+        Text(
+          'Equipos',
+          style:
+              Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(
+                    fontWeight:
+                        FontWeight.w900,
+                  ),
+        ),
+        const SizedBox(height: 20),
+        Card(
+          elevation: 0,
+          child: Padding(
+            padding:
+                const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons
+                      .sync_problem_outlined,
+                  color: colors.error,
+                  size: 34,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'No se pudo sincronizar tu equipo',
+                  style:
+                      Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(
+                            fontWeight:
+                                FontWeight
+                                    .w900,
+                          ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Tu asignación sigue guardada. Intenta sincronizar nuevamente.',
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '$error',
+                  style: Theme.of(
+                    context,
+                  )
+                      .textTheme
+                      .bodySmall,
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(
+                    Icons.refresh_rounded,
+                  ),
+                  label: const Text(
+                    'Reintentar',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _TeamsEmptyState extends StatelessWidget {
   const _TeamsEmptyState();
 
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding:
+          const EdgeInsets.all(20),
       children: [
         Text(
           'Equipos',
           style:
-              Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
+              Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(
+                    fontWeight:
+                        FontWeight.w900,
                   ),
         ),
         const SizedBox(height: 20),
         const Card(
           child: Padding(
-            padding: EdgeInsets.all(20),
+            padding:
+                EdgeInsets.all(20),
             child: Text(
               'Firebase no está disponible en este entorno.',
             ),
@@ -560,19 +901,25 @@ class _TeamsError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding:
+          const EdgeInsets.all(20),
       children: [
         Text(
           'Equipos',
           style:
-              Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
+              Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(
+                    fontWeight:
+                        FontWeight.w900,
                   ),
         ),
         const SizedBox(height: 20),
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding:
+                const EdgeInsets.all(20),
             child: Row(
               crossAxisAlignment:
                   CrossAxisAlignment.start,
