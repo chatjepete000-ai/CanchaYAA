@@ -33,6 +33,7 @@ class ProfileRepository {
           uid: user.uid,
           displayName: user.displayName ?? '',
           email: user.email ?? '',
+          photoUrl: user.photoURL ?? '',
           role: UserRole.player,
           adminScope: AdminScope.none,
           status: AccountStatus.active,
@@ -52,6 +53,7 @@ class ProfileRepository {
         'displayName': user.displayName?.trim() ?? '',
         'email': user.email?.trim().toLowerCase() ?? '',
         'phone': '',
+        'photoUrl': user.photoURL?.trim() ?? '',
         'position': FootballPosition.unspecified.value,
         'role': UserRole.player.value,
         'adminScope': AdminScope.none.value,
@@ -105,6 +107,42 @@ class ProfileRepository {
         'displayName': cleanName,
         'phone': phone.trim(),
         'position': position.value,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(
+        merge: true,
+      ),
+    );
+  }
+
+  Future<void> updateProfilePhoto(
+    String photoUrl,
+  ) async {
+    final user = _auth.currentUser;
+
+    if (user == null) {
+      throw StateError(
+        'No hay una sesión activa.',
+      );
+    }
+
+    final cleanUrl = photoUrl.trim();
+
+    if (cleanUrl.isEmpty) {
+      throw ArgumentError(
+        'La URL de la fotografía está vacía.',
+      );
+    }
+
+    await user.updatePhotoURL(
+      cleanUrl,
+    );
+
+    await user.reload();
+
+    await _userRef(user.uid).set(
+      {
+        'photoUrl': cleanUrl,
         'updatedAt': FieldValue.serverTimestamp(),
       },
       SetOptions(

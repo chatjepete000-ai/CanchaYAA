@@ -9,6 +9,7 @@ class UserProfile {
     required this.adminScope,
     required this.status,
     this.phone = '',
+    this.photoUrl = '',
     this.position = FootballPosition.unspecified,
     this.managedLeagueIds = const [],
   });
@@ -17,6 +18,7 @@ class UserProfile {
   final String displayName;
   final String email;
   final String phone;
+  final String photoUrl;
   final FootballPosition position;
 
   final UserRole role;
@@ -44,6 +46,7 @@ class UserProfile {
       displayName: (data['displayName'] as String?)?.trim() ?? '',
       email: (data['email'] as String?)?.trim() ?? '',
       phone: (data['phone'] as String?)?.trim() ?? '',
+      photoUrl: (data['photoUrl'] as String?)?.trim() ?? '',
       position: FootballPositionX.fromValue(
         data['position'] as String?,
       ),
@@ -66,6 +69,7 @@ class UserProfile {
     return {
       'displayName': displayName.trim(),
       'phone': phone.trim(),
+      'photoUrl': photoUrl.trim(),
       'position': position.value,
     };
   }

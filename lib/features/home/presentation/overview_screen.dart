@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/theme_controller.dart';
+import '../../profile/presentation/profile_screen.dart';
 
 const Color _green = Color(0xFF0E9F57);
 const Color _greenLight = Color(0xFF47E582);
@@ -92,10 +93,6 @@ class _HomeContent extends StatelessWidget {
               delegate:
                   SliverChildListDelegate(
                 [
-                  // =====================================================
-                  // HEADER
-                  // =====================================================
-
                   _buildHeader(
                     context,
                     name: firstName,
@@ -104,20 +101,12 @@ class _HomeContent extends StatelessWidget {
 
                   const SizedBox(height: 18),
 
-                  // =====================================================
-                  // BUSCADOR
-                  // =====================================================
-
                   _buildSearchBar(
                     context,
                     isDark: isDark,
                   ),
 
                   const SizedBox(height: 24),
-
-                  // =====================================================
-                  // PRÓXIMO PARTIDO
-                  // =====================================================
 
                   _buildMatchHero(
                     context,
@@ -126,10 +115,6 @@ class _HomeContent extends StatelessWidget {
 
                   const SizedBox(height: 22),
 
-                  // =====================================================
-                  // ACCESOS RÁPIDOS
-                  // =====================================================
-
                   _buildQuickActions(
                     context,
                     isDark: isDark,
@@ -137,21 +122,12 @@ class _HomeContent extends StatelessWidget {
 
                   const SizedBox(height: 26),
 
-                  // =====================================================
-                  // CANCHAS CERCANAS
-                  // =====================================================
-
                   _buildNearbyCourts(
                     context,
                     isDark: isDark,
                   ),
 
                   const SizedBox(height: 28),
-
-                  // =====================================================
-                  // A PARTIR DE AQUÍ:
-                  // RESÚMENES TIPO WALLET
-                  // =====================================================
 
                   Text(
                     'Tu actividad',
@@ -234,10 +210,6 @@ class _HomeContent extends StatelessWidget {
     );
   }
 
-  // =========================================================
-  // HEADER
-  // =========================================================
-
   Widget _buildHeader(
     BuildContext context, {
     required String name,
@@ -291,9 +263,7 @@ class _HomeContent extends StatelessWidget {
                     size: 15,
                     color: _green,
                   ),
-
                   const SizedBox(width: 5),
-
                   Flexible(
                     child: Text(
                       'Montemorelos, N.L.',
@@ -315,9 +285,7 @@ class _HomeContent extends StatelessWidget {
                       ),
                     ),
                   ),
-
                   const SizedBox(width: 4),
-
                   Icon(
                     CupertinoIcons
                         .chevron_down,
@@ -366,14 +334,18 @@ class _HomeContent extends StatelessWidget {
           user: user,
           name: name,
           isDark: isDark,
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) =>
+                    const ProfileScreen(),
+              ),
+            );
+          },
         ),
       ],
     );
   }
-
-  // =========================================================
-  // BUSCADOR
-  // =========================================================
 
   Widget _buildSearchBar(
     BuildContext context, {
@@ -472,10 +444,6 @@ class _HomeContent extends StatelessWidget {
       ),
     );
   }
-
-  // =========================================================
-  // HERO / PRÓXIMO PARTIDO
-  // =========================================================
 
   Widget _buildMatchHero(
     BuildContext context, {
@@ -649,10 +617,6 @@ class _HomeContent extends StatelessWidget {
     );
   }
 
-  // =========================================================
-  // ACCESOS RÁPIDOS
-  // =========================================================
-
   Widget _buildQuickActions(
     BuildContext context, {
     required bool isDark,
@@ -689,10 +653,6 @@ class _HomeContent extends StatelessWidget {
       ],
     );
   }
-
-  // =========================================================
-  // CANCHAS CERCANAS
-  // =========================================================
 
   Widget _buildNearbyCourts(
     BuildContext context, {
@@ -881,10 +841,6 @@ class _HomeContent extends StatelessWidget {
     );
   }
 
-  // =========================================================
-  // WALLET INVITACIONES
-  // =========================================================
-
   Widget _buildInvitationsWallet(
     BuildContext context, {
     required bool isDark,
@@ -914,10 +870,6 @@ class _HomeContent extends StatelessWidget {
     );
   }
 
-  // =========================================================
-  // WALLET TORNEOS
-  // =========================================================
-
   Widget _buildTournamentWallet(
     BuildContext context, {
     required bool isDark,
@@ -937,10 +889,6 @@ class _HomeContent extends StatelessWidget {
     );
   }
 
-  // =========================================================
-  // WALLET EQUIPO
-  // =========================================================
-
   Widget _buildTeamWallet(
     BuildContext context, {
     required bool isDark,
@@ -959,10 +907,6 @@ class _HomeContent extends StatelessWidget {
           'assets/images/home/escuadra_acero_luces_verdes.png',
     );
   }
-
-  // =========================================================
-  // TEMPORADA
-  // =========================================================
 
   Widget _buildSeasonMessage(
     BuildContext context, {
@@ -1066,10 +1010,6 @@ class _HomeContent extends StatelessWidget {
     );
   }
 }
-
-// ===========================================================
-// ACTIVITY WALLET
-// ===========================================================
 
 class _ActivityWallet
     extends StatelessWidget {
@@ -1321,10 +1261,6 @@ class _ActivityWallet
   }
 }
 
-// ===========================================================
-// QUICK CARD
-// ===========================================================
-
 class _QuickCard extends StatelessWidget {
   const _QuickCard({
     required this.icon,
@@ -1431,10 +1367,6 @@ class _QuickCard extends StatelessWidget {
   }
 }
 
-// ===========================================================
-// SECTION TITLE
-// ===========================================================
-
 class _SectionTitle
     extends StatelessWidget {
   const _SectionTitle({
@@ -1533,10 +1465,6 @@ class _SectionTitle
   }
 }
 
-// ===========================================================
-// MAP PIN
-// ===========================================================
-
 class _MapPin extends StatelessWidget {
   const _MapPin({
     required this.label,
@@ -1628,10 +1556,6 @@ class _MapPin extends StatelessWidget {
     );
   }
 }
-
-// ===========================================================
-// THEME TOGGLE
-// ===========================================================
 
 class _ThemeToggle
     extends StatelessWidget {
@@ -1752,10 +1676,6 @@ class _ThemeToggle
   }
 }
 
-// ===========================================================
-// HEADER BUTTON
-// ===========================================================
-
 class _HeaderButton
     extends StatelessWidget {
   const _HeaderButton({
@@ -1837,16 +1757,12 @@ class _HeaderButton
   }
 }
 
-// ===========================================================
-// PROFILE BUTTON
-// ===========================================================
-
-class _ProfileButton
-    extends StatelessWidget {
+class _ProfileButton extends StatelessWidget {
   const _ProfileButton({
     required this.user,
     required this.name,
     required this.isDark,
+    required this.onTap,
   });
 
   final User? user;
@@ -1855,93 +1771,103 @@ class _ProfileButton
 
   final bool isDark;
 
+  final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
     final photoUrl =
         user?.photoURL?.trim();
 
-    return Container(
-      padding:
-          const EdgeInsets.fromLTRB(
-        3,
-        3,
-        7,
-        3,
-      ),
-      decoration: BoxDecoration(
-        color: isDark
-            ? const Color(
-                0xFF0A2118,
-              )
-            : Colors.white,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius:
-            BorderRadius.circular(
-          100,
-        ),
-        border: Border.all(
-          color: isDark
-              ? const Color(
-                  0xFF17422F,
-                )
-              : const Color(
-                  0xFFDCE7E0,
+            BorderRadius.circular(100),
+        child: Container(
+          padding:
+              const EdgeInsets.fromLTRB(
+            3,
+            3,
+            7,
+            3,
+          ),
+          decoration: BoxDecoration(
+            color: isDark
+                ? const Color(
+                    0xFF0A2118,
+                  )
+                : Colors.white,
+            borderRadius:
+                BorderRadius.circular(
+              100,
+            ),
+            border: Border.all(
+              color: isDark
+                  ? const Color(
+                      0xFF17422F,
+                    )
+                  : const Color(
+                      0xFFDCE7E0,
+                    ),
+            ),
+          ),
+          child: Row(
+            mainAxisSize:
+                MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 16,
+                backgroundColor:
+                    const Color(
+                  0xFFD9F2E2,
                 ),
-        ),
-      ),
-      child: Row(
-        mainAxisSize:
-            MainAxisSize.min,
-        children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor:
-                const Color(
-              0xFFD9F2E2,
-            ),
-            foregroundImage:
-                photoUrl != null &&
-                        photoUrl.isNotEmpty
-                    ? NetworkImage(
-                        photoUrl,
-                      )
-                    : null,
-            child:
-                photoUrl == null ||
-                        photoUrl.isEmpty
-                    ? const Icon(
-                        CupertinoIcons
-                            .person_fill,
-                        size: 15,
-                        color: _green,
-                      )
-                    : null,
-          ),
-
-          const SizedBox(width: 5),
-
-          ConstrainedBox(
-            constraints:
-                const BoxConstraints(
-              maxWidth: 45,
-            ),
-            child: Text(
-              name,
-              maxLines: 1,
-              overflow:
-                  TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight:
-                    FontWeight.w800,
-                color: isDark
-                    ? Colors.white
-                    : const Color(
-                        0xFF21352A,
-                      ),
+                foregroundImage:
+                    photoUrl != null &&
+                            photoUrl.isNotEmpty
+                        ? NetworkImage(
+                            photoUrl,
+                          )
+                        : null,
+                child:
+                    photoUrl == null ||
+                            photoUrl.isEmpty
+                        ? const Icon(
+                            CupertinoIcons
+                                .person_fill,
+                            size: 15,
+                            color: _green,
+                          )
+                        : null,
               ),
-            ),
+
+              const SizedBox(width: 5),
+
+              ConstrainedBox(
+                constraints:
+                    const BoxConstraints(
+                  maxWidth: 45,
+                ),
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow:
+                      TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight:
+                        FontWeight.w800,
+                    color: isDark
+                        ? Colors.white
+                        : const Color(
+                            0xFF21352A,
+                          ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

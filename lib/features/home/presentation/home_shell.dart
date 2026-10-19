@@ -6,7 +6,6 @@ import '../../../core/theme/theme_controller.dart';
 import '../../leagues/presentation/league_admin_screen.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/domain/user_profile.dart';
-import '../../profile/presentation/profile_screen.dart';
 import '../../teams/presentation/teams_screen.dart';
 import '../../tournaments/presentation/tournaments_screen.dart';
 import 'overview_screen.dart';
@@ -61,7 +60,6 @@ class _HomeShellState extends State<HomeShell> {
       const TournamentsScreen(),
       if (canManageLeague)
         const LeagueAdminScreen(),
-      const ProfileScreen(),
     ];
 
     final navItems = <_NavItemData>[
@@ -86,17 +84,11 @@ class _HomeShellState extends State<HomeShell> {
           icon: CupertinoIcons.shield,
           selectedIcon: CupertinoIcons.shield_fill,
         ),
-      const _NavItemData(
-        label: 'Perfil',
-        icon: CupertinoIcons.person_crop_circle,
-        selectedIcon:
-            CupertinoIcons.person_crop_circle_fill,
-      ),
     ];
 
     final safeIndex =
         _selectedIndex >= screens.length
-            ? screens.length - 1
+            ? 0
             : _selectedIndex;
 
     return Scaffold(
@@ -178,8 +170,7 @@ class _CanchaYaBottomBar extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               color: barColor,
-              borderRadius:
-                  BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(24),
               border: Border.all(
                 color: borderColor,
               ),
@@ -190,8 +181,10 @@ class _CanchaYaBottomBar extends StatelessWidget {
                         isDark ? 0.22 : 0.08,
                   ),
                   blurRadius: 24,
-                  offset:
-                      const Offset(0, 8),
+                  offset: const Offset(
+                    0,
+                    8,
+                  ),
                 ),
               ],
             ),
@@ -201,8 +194,7 @@ class _CanchaYaBottomBar extends StatelessWidget {
               children: List.generate(
                 items.length,
                 (index) {
-                  final item =
-                      items[index];
+                  final item = items[index];
 
                   final isSelected =
                       index == selectedIndex;
@@ -210,14 +202,10 @@ class _CanchaYaBottomBar extends StatelessWidget {
                   return Expanded(
                     child: _NavigationItem(
                       item: item,
-                      isSelected:
-                          isSelected,
-                      activeColor:
-                          activeGreen,
-                      inactiveColor:
-                          inactiveColor,
-                      isDark:
-                          isDark,
+                      isSelected: isSelected,
+                      activeColor: activeGreen,
+                      inactiveColor: inactiveColor,
+                      isDark: isDark,
                       onTap: () {
                         onSelected(index);
                       },
@@ -259,22 +247,17 @@ class _NavigationItem extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius:
-              BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(18),
           onTap: onTap,
           child: AnimatedContainer(
-            duration:
-                const Duration(
+            duration: const Duration(
               milliseconds: 220,
             ),
-            curve:
-                Curves.easeOutCubic,
-            margin:
-                const EdgeInsets.symmetric(
+            curve: Curves.easeOutCubic,
+            margin: const EdgeInsets.symmetric(
               horizontal: 2,
             ),
-            padding:
-                const EdgeInsets.symmetric(
+            padding: const EdgeInsets.symmetric(
               horizontal: 3,
               vertical: 3,
             ),
@@ -282,49 +265,35 @@ class _NavigationItem extends StatelessWidget {
               color: isSelected
                   ? activeColor.withValues(
                       alpha:
-                          isDark
-                              ? 0.13
-                              : 0.11,
+                          isDark ? 0.13 : 0.11,
                     )
                   : Colors.transparent,
               borderRadius:
-                  BorderRadius.circular(
-                18,
-              ),
+                  BorderRadius.circular(18),
             ),
             child: Column(
-              mainAxisSize:
-                  MainAxisSize.min,
+              mainAxisSize: MainAxisSize.min,
               mainAxisAlignment:
                   MainAxisAlignment.center,
               children: [
                 AnimatedContainer(
-                  duration:
-                      const Duration(
+                  duration: const Duration(
                     milliseconds: 220,
                   ),
                   width:
-                      isSelected
-                          ? 34
-                          : 30,
+                      isSelected ? 34 : 30,
                   height: 27,
-                  alignment:
-                      Alignment.center,
-                  decoration:
-                      BoxDecoration(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
                     color: isSelected
-                        ? activeColor
-                            .withValues(
-                            alpha:
-                                isDark
-                                    ? 0.16
-                                    : 0.12,
+                        ? activeColor.withValues(
+                            alpha: isDark
+                                ? 0.16
+                                : 0.12,
                           )
-                        : Colors
-                            .transparent,
+                        : Colors.transparent,
                     borderRadius:
-                        BorderRadius
-                            .circular(
+                        BorderRadius.circular(
                       11,
                     ),
                   ),
@@ -333,63 +302,42 @@ class _NavigationItem extends StatelessWidget {
                         ? item.selectedIcon
                         : item.icon,
                     size:
-                        isSelected
-                            ? 20
-                            : 19,
-                    color:
-                        isSelected
-                            ? activeColor
-                            : inactiveColor,
+                        isSelected ? 20 : 19,
+                    color: isSelected
+                        ? activeColor
+                        : inactiveColor,
                   ),
                 ),
-
-                const SizedBox(
-                  height: 1,
-                ),
-
+                const SizedBox(height: 1),
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   child: Text(
                     item.label,
                     maxLines: 1,
                     style: TextStyle(
-                      color:
-                          isSelected
-                              ? activeColor
-                              : inactiveColor,
+                      color: isSelected
+                          ? activeColor
+                          : inactiveColor,
                       fontSize: 10,
                       height: 1,
-                      fontWeight:
-                          isSelected
-                              ? FontWeight
-                                  .w800
-                              : FontWeight
-                                  .w600,
+                      fontWeight: isSelected
+                          ? FontWeight.w800
+                          : FontWeight.w600,
                     ),
                   ),
                 ),
-
-                const SizedBox(
-                  height: 2,
-                ),
-
+                const SizedBox(height: 2),
                 AnimatedContainer(
-                  duration:
-                      const Duration(
+                  duration: const Duration(
                     milliseconds: 220,
                   ),
                   width:
-                      isSelected
-                          ? 15
-                          : 0,
+                      isSelected ? 15 : 0,
                   height: 2,
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        activeColor,
+                  decoration: BoxDecoration(
+                    color: activeColor,
                     borderRadius:
-                        BorderRadius
-                            .circular(
+                        BorderRadius.circular(
                       100,
                     ),
                   ),

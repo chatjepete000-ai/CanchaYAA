@@ -112,6 +112,7 @@ service cloud.firestore {
           .hasOnly([
             'displayName',
             'phone',
+            'photoUrl',
             'position',
             'updatedAt'
           ]);

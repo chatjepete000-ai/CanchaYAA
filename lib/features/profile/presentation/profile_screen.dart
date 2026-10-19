@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../auth/domain/user_role.dart';
@@ -14,37 +15,40 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Esto evita que los widget tests fallen cuando Firebase
-    // no ha sido inicializado dentro del entorno de pruebas.
-    if (Firebase.apps.isEmpty) {
-      return _buildLoggedOutProfile(
-        context,
-        firebaseAvailable: false,
-      );
-    }
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Mi perfil',
+        ),
+      ),
+      body: Firebase.apps.isEmpty
+          ? _buildLoggedOutProfile(
+              context,
+              firebaseAvailable: false,
+            )
+          : StreamBuilder<User?>(
+              stream: FirebaseAuth.instance.authStateChanges(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(),
+                  );
+                }
 
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
-        }
+                final user = snapshot.data;
 
-        final user = snapshot.data;
+                if (user == null) {
+                  return _buildLoggedOutProfile(
+                    context,
+                    firebaseAvailable: true,
+                  );
+                }
 
-        if (user == null) {
-          return _buildLoggedOutProfile(
-            context,
-            firebaseAvailable: true,
-          );
-        }
-
-        return _AuthenticatedProfile(
-          user: user,
-        );
-      },
+                return _AuthenticatedProfile(
+                  user: user,
+                );
+              },
+            ),
     );
   }
 
@@ -57,13 +61,6 @@ class ProfileScreen extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text(
-          'Perfil',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
-        ),
-        const SizedBox(height: 8),
         Text(
           'Tu cuenta personal dentro de CanchaYA.',
           style: Theme.of(context).textTheme.bodyMedium,
@@ -79,8 +76,8 @@ class ProfileScreen extends StatelessWidget {
                   radius: 44,
                   backgroundColor: colors.primaryContainer,
                   child: Icon(
-                    Icons.person_outline,
-                    size: 48,
+                    CupertinoIcons.person_fill,
+                    size: 42,
                     color: colors.primary,
                   ),
                 ),
@@ -110,7 +107,7 @@ class ProfileScreen extends StatelessWidget {
                           }
                         : null,
                     icon: const Icon(
-                      Icons.login,
+                      CupertinoIcons.arrow_right_circle,
                     ),
                     label: const Text(
                       'Iniciar sesión',
@@ -131,7 +128,7 @@ class ProfileScreen extends StatelessWidget {
                           }
                         : null,
                     icon: const Icon(
-                      Icons.person_add_alt_1,
+                      CupertinoIcons.person_add,
                     ),
                     label: const Text(
                       'Crear cuenta',
@@ -178,6 +175,10 @@ class _AuthenticatedProfileState extends State<_AuthenticatedProfile> {
       if (!mounted) {
         return;
       }
+
+      Navigator.of(context).popUntil(
+        (route) => route.isFirst,
+      );
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -280,38 +281,38 @@ class _ProfileContent extends StatelessWidget {
 
     final initial = name.substring(0, 1).toUpperCase();
 
+    final photoUrl = profile.photoUrl.trim();
+
+    final hasPhoto = photoUrl.isNotEmpty;
+
     final roleLabel = _getRoleLabel(profile);
 
     return ListView(
+      physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(
         20,
-        20,
+        10,
         20,
         32,
       ),
       children: [
         Text(
-          'Mi perfil',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
-        ),
-        const SizedBox(height: 6),
-        Text(
           'Tu identidad y actividad dentro de CanchaYA.',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
+
         const SizedBox(height: 22),
 
-        // Tarjeta principal
         Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
               colors: [
                 colors.primary,
                 colors.primary.withValues(
-                  alpha: 0.78,
+                  alpha: 0.76,
                 ),
               ],
             ),
@@ -319,35 +320,55 @@ class _ProfileContent extends StatelessWidget {
           ),
           child: Column(
             children: [
-              CircleAvatar(
-                radius: 46,
-                backgroundColor: colors.onPrimary.withValues(
-                  alpha: 0.16,
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(
+                      alpha: 0.60,
+                    ),
+                    width: 2,
+                  ),
                 ),
-                child: Text(
-                  initial,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineMedium
-                      ?.copyWith(
-                        color: colors.onPrimary,
-                        fontWeight: FontWeight.w900,
-                      ),
+                child: CircleAvatar(
+                  radius: 47,
+                  backgroundColor: colors.onPrimary.withValues(
+                    alpha: 0.16,
+                  ),
+                  foregroundImage: hasPhoto
+                      ? NetworkImage(
+                          photoUrl,
+                        )
+                      : null,
+                  child: hasPhoto
+                      ? null
+                      : Text(
+                          initial,
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineMedium
+                              ?.copyWith(
+                                color: colors.onPrimary,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
                 ),
               ),
+
               const SizedBox(height: 16),
+
               Text(
                 name,
                 textAlign: TextAlign.center,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       color: colors.onPrimary,
                       fontWeight: FontWeight.w900,
                     ),
               ),
+
               const SizedBox(height: 5),
+
               Text(
                 email,
                 textAlign: TextAlign.center,
@@ -357,18 +378,20 @@ class _ProfileContent extends StatelessWidget {
                   ),
                 ),
               ),
+
               const SizedBox(height: 16),
+
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 alignment: WrapAlignment.center,
                 children: [
                   _ProfileBadge(
-                    icon: Icons.verified_user_outlined,
+                    icon: CupertinoIcons.shield_fill,
                     label: roleLabel,
                   ),
                   _ProfileBadge(
-                    icon: Icons.sports_soccer_outlined,
+                    icon: CupertinoIcons.sportscourt_fill,
                     label: profile.position.label,
                   ),
                 ],
@@ -391,44 +414,40 @@ class _ProfileContent extends StatelessWidget {
         Card(
           elevation: 0,
           clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              ListTile(
-                leading: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: colors.primaryContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    Icons.person_outline,
-                    color: colors.primary,
-                  ),
-                ),
-                title: const Text(
-                  'Editar perfil',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                subtitle: const Text(
-                  'Nombre, teléfono y posición',
-                ),
-                trailing: const Icon(
-                  Icons.chevron_right,
-                ),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => EditProfileScreen(
-                        profile: profile,
-                      ),
-                    ),
-                  );
-                },
+          child: ListTile(
+            leading: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: colors.primaryContainer,
+                borderRadius: BorderRadius.circular(12),
               ),
-            ],
+              child: Icon(
+                CupertinoIcons.person_crop_circle,
+                color: colors.primary,
+              ),
+            ),
+            title: const Text(
+              'Editar perfil',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            subtitle: const Text(
+              'Foto, nombre, teléfono y posición',
+            ),
+            trailing: const Icon(
+              CupertinoIcons.chevron_right,
+            ),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => EditProfileScreen(
+                    profile: profile,
+                  ),
+                ),
+              );
+            },
           ),
         ),
 
@@ -439,14 +458,13 @@ class _ProfileContent extends StatelessWidget {
             Expanded(
               child: Text(
                 'Invitaciones',
-                style:
-                    Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
               ),
             ),
             Icon(
-              Icons.mail_outline,
+              CupertinoIcons.envelope,
               color: colors.primary,
             ),
           ],
@@ -469,7 +487,7 @@ class _ProfileContent extends StatelessWidget {
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(
-                    Icons.mark_email_read_outlined,
+                    CupertinoIcons.envelope_open,
                     color: colors.primary,
                   ),
                 ),
@@ -498,7 +516,6 @@ class _ProfileContent extends StatelessWidget {
 
         const SizedBox(height: 24),
 
-        // Información de permisos
         Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
@@ -509,13 +526,15 @@ class _ProfileContent extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
-                Icons.security_outlined,
+                CupertinoIcons.shield,
                 color: colors.primary,
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  _getPermissionDescription(profile),
+                  _getPermissionDescription(
+                    profile,
+                  ),
                 ),
               ),
             ],
@@ -531,7 +550,7 @@ class _ProfileContent extends StatelessWidget {
               onSignOut();
             },
             icon: const Icon(
-              Icons.logout,
+              CupertinoIcons.arrow_right_square,
             ),
             label: const Text(
               'Cerrar sesión',
@@ -542,7 +561,9 @@ class _ProfileContent extends StatelessWidget {
     );
   }
 
-  String _getRoleLabel(UserProfile profile) {
+  String _getRoleLabel(
+    UserProfile profile,
+  ) {
     if (profile.isPlatformAdmin) {
       return 'Admin de plataforma';
     }
@@ -558,7 +579,9 @@ class _ProfileContent extends StatelessWidget {
     return 'Jugador';
   }
 
-  String _getPermissionDescription(UserProfile profile) {
+  String _getPermissionDescription(
+    UserProfile profile,
+  ) {
     if (profile.isPlatformAdmin) {
       return 'Tienes permisos globales de administración de CanchaYA.';
     }
@@ -633,13 +656,6 @@ class _ProfileError extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text(
-          'Mi perfil',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
-        ),
-        const SizedBox(height: 20),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -647,7 +663,7 @@ class _ProfileError extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Icon(
-                  Icons.cloud_off_outlined,
+                  CupertinoIcons.exclamationmark_triangle,
                 ),
                 const SizedBox(width: 12),
                 Expanded(

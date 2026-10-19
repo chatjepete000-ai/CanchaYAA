@@ -1,6 +1,10 @@
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../auth/domain/user_role.dart';
+import '../data/cloudinary_profile_photo_service.dart';
 import '../data/profile_repository.dart';
 import '../domain/user_profile.dart';
 
@@ -18,7 +22,13 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
+
   final _repository = ProfileRepository();
+
+  final _photoService =
+      CloudinaryProfilePhotoService();
+
+  final _imagePicker = ImagePicker();
 
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
@@ -26,6 +36,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late FootballPosition _position;
 
   bool _saving = false;
+  bool _uploadingPhoto = false;
+
+  String _photoUrl = '';
 
   @override
   void initState() {
@@ -40,6 +53,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
 
     _position = widget.profile.position;
+
+    _photoUrl = widget.profile.photoUrl;
   }
 
   @override
@@ -50,8 +65,206 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
+  bool get _isDesktop {
+    if (kIsWeb) {
+      return false;
+    }
+
+    return defaultTargetPlatform ==
+            TargetPlatform.windows ||
+        defaultTargetPlatform ==
+            TargetPlatform.macOS ||
+        defaultTargetPlatform ==
+            TargetPlatform.linux;
+  }
+
+  Future<bool> _showPhotoPermissionDialog() async {
+    final result =
+        await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final colors =
+            Theme.of(dialogContext).colorScheme;
+
+        return AlertDialog(
+          icon: Icon(
+            _isDesktop
+                ? CupertinoIcons.folder
+                : CupertinoIcons.photo_on_rectangle,
+            color: colors.primary,
+            size: 34,
+          ),
+          title: Text(
+            _isDesktop
+                ? 'Seleccionar una fotografía'
+                : 'Acceso a tus fotografías',
+            textAlign: TextAlign.center,
+          ),
+          content: Text(
+            _isDesktop
+                ? 'CanchaYA abrirá el explorador de archivos para que elijas una fotografía desde tu computadora.'
+                : 'CanchaYA necesita que selecciones una fotografía de tu dispositivo para usarla como foto de perfil.\n\nSolo tendremos acceso a la imagen que tú elijas.',
+            textAlign: TextAlign.center,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(
+                  dialogContext,
+                ).pop(false);
+              },
+              child: const Text(
+                'Cancelar',
+              ),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.of(
+                  dialogContext,
+                ).pop(true);
+              },
+              icon: Icon(
+                _isDesktop
+                    ? CupertinoIcons.folder_open
+                    : CupertinoIcons.photo,
+              ),
+              label: Text(
+                _isDesktop
+                    ? 'Abrir archivos'
+                    : 'Seleccionar foto',
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    return result ?? false;
+  }
+
+  Future<void> _pickAndUploadPhoto() async {
+    if (_uploadingPhoto) {
+      return;
+    }
+
+    final allowed =
+        await _showPhotoPermissionDialog();
+
+    if (!allowed || !mounted) {
+      return;
+    }
+
+    XFile? image;
+
+    try {
+      image =
+          await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+
+        // Reduce un poco el peso
+        // sin afectar demasiado la calidad.
+        imageQuality: 85,
+
+        // Evita subir fotografías gigantes.
+        maxWidth: 1200,
+        maxHeight: 1200,
+
+        requestFullMetadata: false,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isDesktop
+                ? 'No se pudo abrir el explorador de archivos: $error'
+                : 'No se pudo abrir el selector de fotografías: $error',
+          ),
+        ),
+      );
+
+      return;
+    }
+
+    // El usuario cerró el selector
+    // sin escoger fotografía.
+    if (image == null) {
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _uploadingPhoto = true;
+    });
+
+    try {
+      final uploadedUrl =
+          await _photoService.uploadProfilePhoto(
+        image,
+      );
+
+      await _repository.updateProfilePhoto(
+        uploadedUrl,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _photoUrl = uploadedUrl;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Foto de perfil actualizada correctamente.',
+          ),
+        ),
+      );
+    } on CloudinaryProfilePhotoException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.message,
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No se pudo actualizar la fotografía: $error',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _uploadingPhoto = false;
+        });
+      }
+    }
+  }
+
   Future<void> _save() async {
-    final isValid = _formKey.currentState?.validate() ?? false;
+    final isValid =
+        _formKey.currentState?.validate() ??
+            false;
 
     if (!isValid) {
       return;
@@ -63,8 +276,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     try {
       await _repository.updateCurrentProfile(
-        displayName: _nameController.text,
-        phone: _phoneController.text,
+        displayName:
+            _nameController.text,
+        phone:
+            _phoneController.text,
         position: _position,
       );
 
@@ -104,7 +319,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final colors =
+        Theme.of(context).colorScheme;
+
+    final hasPhoto =
+        _photoUrl.trim().isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -116,45 +335,144 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.all(20),
+            padding:
+                const EdgeInsets.all(20),
             children: [
               Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: colors.primaryContainer,
-                  borderRadius: BorderRadius.circular(22),
+                padding:
+                    const EdgeInsets.all(
+                  20,
                 ),
-                child: Row(
+                decoration: BoxDecoration(
+                  color:
+                      colors.primaryContainer,
+                  borderRadius:
+                      BorderRadius.circular(
+                    22,
+                  ),
+                ),
+                child: Column(
                   children: [
-                    CircleAvatar(
-                      radius: 28,
-                      backgroundColor: colors.primary,
-                      child: Icon(
-                        Icons.person_outline,
-                        color: colors.onPrimary,
-                      ),
-                    ),
-                    const SizedBox(
-                      width: 14,
-                    ),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Información del jugador',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
+                    Stack(
+                      clipBehavior:
+                          Clip.none,
+                      children: [
+                        CircleAvatar(
+                          radius: 52,
+                          backgroundColor:
+                              colors.primary,
+                          foregroundImage:
+                              hasPhoto
+                                  ? NetworkImage(
+                                      _photoUrl,
+                                    )
+                                  : null,
+                          child: hasPhoto
+                              ? null
+                              : Icon(
+                                  CupertinoIcons
+                                      .person_fill,
+                                  size: 42,
+                                  color: colors
+                                      .onPrimary,
+                                ),
+                        ),
+
+                        Positioned(
+                          right: -2,
+                          bottom: -2,
+                          child: Material(
+                            color:
+                                colors.primary,
+                            shape:
+                                const CircleBorder(),
+                            child: InkWell(
+                              customBorder:
+                                  const CircleBorder(),
+                              onTap:
+                                  _uploadingPhoto
+                                      ? null
+                                      : _pickAndUploadPhoto,
+                              child: SizedBox(
+                                width: 38,
+                                height: 38,
+                                child: Center(
+                                  child:
+                                      _uploadingPhoto
+                                          ? SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child:
+                                                  CircularProgressIndicator(
+                                                strokeWidth:
+                                                    2,
+                                                color:
+                                                    colors.onPrimary,
+                                              ),
+                                            )
+                                          : Icon(
+                                              _isDesktop
+                                                  ? CupertinoIcons.folder_fill
+                                                  : CupertinoIcons.camera_fill,
+                                              size: 18,
+                                              color:
+                                                  colors.onPrimary,
+                                            ),
+                                ),
+                              ),
                             ),
                           ),
-                          SizedBox(
-                            height: 4,
-                          ),
-                          Text(
-                            'Actualiza tus datos y tu posición en cancha.',
-                          ),
-                        ],
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(
+                      height: 16,
+                    ),
+
+                    const Text(
+                      'Foto de perfil',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight:
+                            FontWeight.w900,
+                      ),
+                    ),
+
+                    const SizedBox(
+                      height: 5,
+                    ),
+
+                    Text(
+                      _uploadingPhoto
+                          ? 'Subiendo fotografía...'
+                          : _isDesktop
+                              ? 'Toca la carpeta para elegir una imagen de tu computadora.'
+                              : 'Toca la cámara para elegir una imagen de tu galería.',
+                      textAlign:
+                          TextAlign.center,
+                    ),
+
+                    const SizedBox(
+                      height: 14,
+                    ),
+
+                    OutlinedButton.icon(
+                      onPressed:
+                          _uploadingPhoto
+                              ? null
+                              : _pickAndUploadPhoto,
+                      icon: Icon(
+                        _isDesktop
+                            ? CupertinoIcons
+                                .folder_open
+                            : CupertinoIcons
+                                .photo_on_rectangle,
+                      ),
+                      label: Text(
+                        hasPhoto
+                            ? 'Cambiar fotografía'
+                            : 'Agregar fotografía',
                       ),
                     ),
                   ],
@@ -166,22 +484,27 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
 
               TextFormField(
-                controller: _nameController,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
+                controller:
+                    _nameController,
+                textInputAction:
+                    TextInputAction.next,
+                decoration:
+                    const InputDecoration(
                   labelText: 'Nombre',
                   prefixIcon: Icon(
-                    Icons.person_outline,
+                    CupertinoIcons.person,
                   ),
                 ),
                 validator: (value) {
-                  final cleanValue = value?.trim() ?? '';
+                  final cleanValue =
+                      value?.trim() ?? '';
 
                   if (cleanValue.isEmpty) {
                     return 'Escribe tu nombre.';
                   }
 
-                  if (cleanValue.length < 2) {
+                  if (cleanValue.length <
+                      2) {
                     return 'El nombre es demasiado corto.';
                   }
 
@@ -194,25 +517,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
 
               TextFormField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
+                controller:
+                    _phoneController,
+                keyboardType:
+                    TextInputType.phone,
+                textInputAction:
+                    TextInputAction.next,
+                decoration:
+                    const InputDecoration(
                   labelText: 'Teléfono',
                   hintText: 'Opcional',
                   prefixIcon: Icon(
-                    Icons.phone_outlined,
+                    CupertinoIcons.phone,
                   ),
                 ),
                 validator: (value) {
-                  final cleanValue = value?.trim() ?? '';
+                  final cleanValue =
+                      value?.trim() ?? '';
 
                   if (cleanValue.isEmpty) {
                     return null;
                   }
 
-                  final phone = cleanValue.replaceAll(
-                    RegExp(r'[^0-9+]'),
+                  final phone =
+                      cleanValue.replaceAll(
+                    RegExp(
+                      r'[^0-9+]',
+                    ),
                     '',
                   );
 
@@ -220,7 +551,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     return 'El teléfono parece demasiado corto.';
                   }
 
-                  if (phone.length > 16) {
+                  if (phone.length >
+                      16) {
                     return 'El teléfono parece demasiado largo.';
                   }
 
@@ -232,17 +564,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 height: 14,
               ),
 
-              DropdownButtonFormField<FootballPosition>(
-                initialValue: _position,
-                decoration: const InputDecoration(
+              DropdownButtonFormField<
+                  FootballPosition>(
+                initialValue:
+                    _position,
+                decoration:
+                    const InputDecoration(
                   labelText: 'Posición',
                   prefixIcon: Icon(
-                    Icons.sports_soccer_outlined,
+                    CupertinoIcons
+                        .sportscourt,
                   ),
                 ),
-                items: FootballPosition.values.map(
+                items: FootballPosition
+                    .values
+                    .map(
                   (position) {
-                    return DropdownMenuItem<FootballPosition>(
+                    return DropdownMenuItem<
+                        FootballPosition>(
                       value: position,
                       child: Text(
                         position.label,
@@ -253,12 +592,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 onChanged: _saving
                     ? null
                     : (value) {
-                        if (value == null) {
+                        if (value ==
+                            null) {
                           return;
                         }
 
                         setState(() {
-                          _position = value;
+                          _position =
+                              value;
                         });
                       },
               ),
@@ -268,17 +609,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
 
               FilledButton.icon(
-                onPressed: _saving ? null : _save,
+                onPressed:
+                    _saving ||
+                            _uploadingPhoto
+                        ? null
+                        : _save,
                 icon: _saving
                     ? const SizedBox(
                         width: 18,
                         height: 18,
-                        child: CircularProgressIndicator(
+                        child:
+                            CircularProgressIndicator(
                           strokeWidth: 2,
                         ),
                       )
                     : const Icon(
-                        Icons.save_outlined,
+                        CupertinoIcons
+                            .check_mark_circled,
                       ),
                 label: Text(
                   _saving
@@ -292,23 +639,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
 
               Container(
-                padding: const EdgeInsets.all(18),
+                padding:
+                    const EdgeInsets.all(
+                  18,
+                ),
                 decoration: BoxDecoration(
-                  color: colors.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(18),
+                  color: colors
+                      .surfaceContainerHighest,
+                  borderRadius:
+                      BorderRadius.circular(
+                    18,
+                  ),
                 ),
                 child: const Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                      CrossAxisAlignment
+                          .start,
                   children: [
                     Icon(
-                      Icons.security_outlined,
+                      CupertinoIcons
+                          .shield,
                     ),
                     SizedBox(
                       width: 12,
                     ),
                     Expanded(
                       child: Text(
-                        'Aquí puedes cambiar tu información personal y tu posición futbolística. Los permisos de Jugador, Capitán o Administrador no se pueden modificar desde el perfil.',
+                        'Aquí puedes cambiar tu información personal, fotografía y posición futbolística. Los permisos de Jugador, Capitán o Administrador no se pueden modificar desde el perfil.',
                       ),
                     ),
                   ],
