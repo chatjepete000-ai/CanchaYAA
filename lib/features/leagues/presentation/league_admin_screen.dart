@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
+import '../../tournaments/presentation/tournament_schedule_screen.dart';
 import '../data/league_repository.dart';
 import '../domain/league_models.dart';
 import 'league_teams_screen.dart';
@@ -299,7 +300,7 @@ class _LeagueAdminContentState extends State<_LeagueAdminContent> {
           onTap: () {
             _showComingSoon(
               context,
-              'El calendario se conectará más adelante.',
+              'Abre un torneo desde Torneos para generar su calendario.',
             );
           },
         ),
@@ -497,7 +498,18 @@ class _LeagueTournamentsScreen extends StatelessWidget {
 
               return Card(
                 elevation: 0,
+                clipBehavior: Clip.antiAlias,
                 child: ListTile(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            TournamentScheduleScreen(
+                          tournament: tournament,
+                        ),
+                      ),
+                    );
+                  },
                   leading: const CircleAvatar(
                     child: Icon(
                       Icons.emoji_events_outlined,
@@ -513,6 +525,9 @@ class _LeagueTournamentsScreen extends StatelessWidget {
                     '${tournament.category} · ${tournament.format.label}\n${tournament.status.label}',
                   ),
                   isThreeLine: true,
+                  trailing: const Icon(
+                    Icons.chevron_right,
+                  ),
                 ),
               );
             },

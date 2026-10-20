@@ -52,11 +52,6 @@ service cloud.firestore {
           in teamData(teamId).managerUserIds;
     }
 
-    // El Admin de Liga puede administrar
-    // invitaciones a encargados.
-    //
-    // Para invitaciones a jugadores también
-    // puede hacerlo el encargado real del equipo.
     function canManageJoinCode(
       teamId,
       leagueId,
@@ -77,9 +72,6 @@ service cloud.firestore {
       )
       ||
       (
-        // Compatibilidad con posibles documentos
-        // antiguos. No se permite CREAR nuevos
-        // códigos de estos tipos.
         (
           purpose == 'teamCreation'
           ||
@@ -87,6 +79,58 @@ service cloud.firestore {
         )
         && isLeagueAdmin(leagueId)
       );
+    }
+
+    function isValidPlayerJoinCode(codeId) {
+      return isSignedIn()
+
+        && exists(
+          /databases/$(database)/documents/teamJoinCodes/$(codeId)
+        )
+
+        && get(
+          /databases/$(database)/documents/teamJoinCodes/$(codeId)
+        ).data.status == 'active'
+
+        && get(
+          /databases/$(database)/documents/teamJoinCodes/$(codeId)
+        ).data.purpose == 'playerInvitation'
+
+        && (
+          get(
+            /databases/$(database)/documents/teamJoinCodes/$(codeId)
+          ).data.invitedUserId == null
+
+          ||
+
+          get(
+            /databases/$(database)/documents/teamJoinCodes/$(codeId)
+          ).data.invitedUserId == ''
+
+          ||
+
+          get(
+            /databases/$(database)/documents/teamJoinCodes/$(codeId)
+          ).data.invitedUserId == request.auth.uid
+        )
+
+        && (
+          get(
+            /databases/$(database)/documents/teamJoinCodes/$(codeId)
+          ).data.invitedEmail == null
+
+          ||
+
+          get(
+            /databases/$(database)/documents/teamJoinCodes/$(codeId)
+          ).data.invitedEmail == ''
+
+          ||
+
+          get(
+            /databases/$(database)/documents/teamJoinCodes/$(codeId)
+          ).data.invitedEmail == currentEmail()
+        );
     }
 
     // ============================================================
@@ -97,14 +141,11 @@ service cloud.firestore {
 
       allow read: if isOwner(userId);
 
-      // Toda cuenta nueva comienza como jugador.
       allow create: if isOwner(userId)
         && request.resource.data.role == 'player'
         && request.resource.data.adminScope == 'none'
         && request.resource.data.status == 'active';
 
-      // El usuario normal solamente modifica
-      // sus datos personales.
       allow update: if isOwner(userId)
         && request.resource.data
           .diff(resource.data)
@@ -130,8 +171,6 @@ service cloud.firestore {
         && request.auth.uid
           in resource.data.adminUserIds;
 
-      // La administración de ligas se habilitará
-      // para Admin de Plataforma.
       allow create, update, delete: if false;
     }
 
@@ -188,10 +227,6 @@ service cloud.firestore {
 
     match /teams/{teamId} {
 
-      // Puede leer:
-      // - Admin de Liga
-      // - Encargado registrado
-      // - Jugador registrado
       allow read: if isSignedIn()
         && (
           isLeagueAdmin(
@@ -205,7 +240,6 @@ service cloud.firestore {
             in resource.data.playerUserIds
         );
 
-      // Solo Admin de Liga crea equipos.
       allow create: if isSignedIn()
         && request.resource.data.leagueId is string
         && isLeagueAdmin(
@@ -246,6 +280,7 @@ service cloud.firestore {
             'playerUserIds',
             'status',
             'lastManagerAssignmentId',
+            'lastPlayerJoinCodeId',
             'updatedAt'
           ]);
 
@@ -357,6 +392,95 @@ service cloud.firestore {
             'updatedAt'
           ]);
 
+      // ----------------------------------------------------------
+      // INGRESO DE JUGADOR MEDIANTE INVITACIÓN
+      // ----------------------------------------------------------
+
+      allow update: if isSignedIn()
+
+        && request.resource.data.leagueId
+          == resource.data.leagueId
+
+        && request.resource.data.tournamentId
+          == resource.data.tournamentId
+
+        && request.resource.data.managerUserIds
+          == resource.data.managerUserIds
+
+        && request.resource.data.status
+          == resource.data.status
+
+        && resource.data.playerUserIds is list
+
+        && request.resource.data.playerUserIds is list
+
+        && !(request.auth.uid
+          in resource.data.playerUserIds)
+
+        && request.auth.uid
+          in request.resource.data.playerUserIds
+
+        && request.resource.data.playerUserIds
+          .hasAll(resource.data.playerUserIds)
+
+        && request.resource.data.playerUserIds.size()
+          == resource.data.playerUserIds.size() + 1
+
+        && request.resource.data.lastPlayerJoinCodeId
+          is string
+
+        && isValidPlayerJoinCode(
+          request.resource.data.lastPlayerJoinCodeId
+        )
+
+        && get(
+          /databases/$(database)/documents/teamJoinCodes/$(request.resource.data.lastPlayerJoinCodeId)
+        ).data.teamId
+          == teamId
+
+        && get(
+          /databases/$(database)/documents/teamJoinCodes/$(request.resource.data.lastPlayerJoinCodeId)
+        ).data.leagueId
+          == resource.data.leagueId
+
+        && get(
+          /databases/$(database)/documents/teamJoinCodes/$(request.resource.data.lastPlayerJoinCodeId)
+        ).data.tournamentId
+          == resource.data.tournamentId
+
+        && existsAfter(
+          /databases/$(database)/documents/teamAssignments/$(request.resource.data.lastPlayerJoinCodeId)
+        )
+
+        && getAfter(
+          /databases/$(database)/documents/teamAssignments/$(request.resource.data.lastPlayerJoinCodeId)
+        ).data.userId
+          == request.auth.uid
+
+        && getAfter(
+          /databases/$(database)/documents/teamAssignments/$(request.resource.data.lastPlayerJoinCodeId)
+        ).data.teamId
+          == teamId
+
+        && getAfter(
+          /databases/$(database)/documents/teamAssignments/$(request.resource.data.lastPlayerJoinCodeId)
+        ).data.role
+          == 'player'
+
+        && getAfter(
+          /databases/$(database)/documents/teamAssignments/$(request.resource.data.lastPlayerJoinCodeId)
+        ).data.status
+          == 'active'
+
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'playerUserIds',
+            'lastPlayerJoinCodeId',
+            'updatedAt'
+          ]);
+
       allow delete: if false;
     }
 
@@ -366,21 +490,12 @@ service cloud.firestore {
 
     match /teamJoinCodes/{codeId} {
 
-      // Quien conoce el código puede consultarlo
-      // estando autenticado.
-      //
-      // No se permite enumerar la colección.
       allow get: if isSignedIn();
 
       allow list: if false;
 
-      // ----------------------------------------------------------
-      // CREAR INVITACIÓN
-      // ----------------------------------------------------------
-
       allow create: if isSignedIn()
 
-        // Todos los campos esperados deben existir.
         && request.resource.data.keys().hasAll([
           'teamId',
           'leagueId',
@@ -401,7 +516,6 @@ service cloud.firestore {
           'revokedByUserId'
         ])
 
-        // No aceptamos campos inesperados.
         && request.resource.data.keys().hasOnly([
           'teamId',
           'leagueId',
@@ -422,9 +536,6 @@ service cloud.firestore {
           'revokedByUserId'
         ])
 
-        // El documento utiliza el propio código como ID.
-        // Como los documentos nunca se eliminan,
-        // un código antiguo jamás puede reciclarse.
         && request.resource.data.code == codeId
 
         && request.resource.data.teamId is string
@@ -439,22 +550,18 @@ service cloud.firestore {
         && request.resource.data.status
           == 'active'
 
-        // A partir de ahora solamente creamos
-        // estos dos tipos de acceso.
         && request.resource.data.purpose
           in [
             'managerInvitation',
             'playerInvitation'
           ]
 
-        // Solamente estas dos formas de entrega.
         && request.resource.data.delivery
           in [
             'qr',
             'email'
           ]
 
-        // Un acceso nuevo todavía no ha sido usado.
         && request.resource.data.usedByUserId == null
 
         && request.resource.data.usedAt == null
@@ -463,40 +570,29 @@ service cloud.firestore {
 
         && request.resource.data.revokedByUserId == null
 
-        // Por ahora no utilizamos vencimiento automático.
         && request.resource.data.expiresAt == null
 
-        // Los timestamps vienen del servidor.
         && request.resource.data.createdAt
           == request.time
 
         && request.resource.data.updatedAt
           == request.time
 
-        // El equipo debe existir.
         && teamExists(
           request.resource.data.teamId
         )
 
-        // El código no puede apuntar a otra liga.
         && teamData(
           request.resource.data.teamId
         ).leagueId
           == request.resource.data.leagueId
 
-        // Tampoco puede apuntar a otro torneo.
         && teamData(
           request.resource.data.teamId
         ).tournamentId
           == request.resource.data.tournamentId
 
-        // --------------------------------------------------------
-        // AUTORIDAD SEGÚN TIPO DE INVITACIÓN
-        // --------------------------------------------------------
-
         && (
-          // Un encargado solamente puede ser
-          // invitado por Admin de Liga.
           (
             request.resource.data.purpose
               == 'managerInvitation'
@@ -508,8 +604,6 @@ service cloud.firestore {
 
           ||
 
-          // Un jugador puede ser invitado por
-          // Admin de Liga o encargado del equipo.
           (
             request.resource.data.purpose
               == 'playerInvitation'
@@ -528,26 +622,16 @@ service cloud.firestore {
           )
         )
 
-        // --------------------------------------------------------
-        // ENTREGA PRESENCIAL
-        // --------------------------------------------------------
-
         && (
           (
             request.resource.data.delivery == 'qr'
 
-            // El QR presencial todavía no pertenece
-            // a una persona concreta.
             && request.resource.data.invitedUserId == null
 
             && request.resource.data.invitedEmail == null
           )
 
           ||
-
-          // ------------------------------------------------------
-          // ENTREGA POR CORREO
-          // ------------------------------------------------------
 
           (
             request.resource.data.delivery == 'email'
@@ -569,13 +653,8 @@ service cloud.firestore {
           )
         );
 
-      // ----------------------------------------------------------
-      // ACTUALIZAR INVITACIÓN
-      // ----------------------------------------------------------
-
       allow update: if isSignedIn()
 
-        // Estos campos nunca pueden cambiar.
         && request.resource.data.code
           == resource.data.code
 
@@ -611,10 +690,6 @@ service cloud.firestore {
 
         && (
 
-          // ======================================================
-          // REVOCAR INVITACIÓN
-          // ======================================================
-
           (
             resource.data.status == 'active'
 
@@ -649,18 +724,12 @@ service cloud.firestore {
 
           ||
 
-          // ======================================================
-          // UTILIZAR INVITACIÓN
-          // ======================================================
-
           (
             resource.data.status == 'active'
 
             && request.resource.data.status
               == 'used'
 
-            // Nadie puede marcar un código como
-            // utilizado por otra persona.
             && request.resource.data.usedByUserId
               == request.auth.uid
 
@@ -670,8 +739,6 @@ service cloud.firestore {
             && request.resource.data.updatedAt
               == request.time
 
-            // Si estaba ligado a un UID,
-            // solamente ese UID puede utilizarlo.
             && (
               resource.data.invitedUserId == null
 
@@ -685,8 +752,6 @@ service cloud.firestore {
                 == request.auth.uid
             )
 
-            // Si fue enviado por correo,
-            // solamente esa cuenta puede utilizarlo.
             && (
               resource.data.invitedEmail == null
 
@@ -712,7 +777,6 @@ service cloud.firestore {
           )
         );
 
-      // Ningún código de CanchaYA se elimina.
       allow delete: if false;
     }
 
@@ -722,9 +786,6 @@ service cloud.firestore {
 
     match /teamManagerInvitations/{invitationId} {
 
-      // Puede consultar:
-      // - usuario invitado por correo
-      // - Admin de Liga
       allow read: if isSignedIn()
         && (
           resource.data.invitedEmail
@@ -737,7 +798,6 @@ service cloud.firestore {
           )
         );
 
-      // Admin de Liga crea la invitación.
       allow create: if isSignedIn()
 
         && request.resource.data.teamId is string
@@ -778,7 +838,6 @@ service cloud.firestore {
         ).tournamentId
           == request.resource.data.tournamentId;
 
-      // Usuario invitado acepta o rechaza.
       allow update: if isSignedIn()
 
         && resource.data.invitedEmail
@@ -819,11 +878,6 @@ service cloud.firestore {
           ])
 
         && (
-
-          // ------------------------------------------------------
-          // ACEPTAR
-          // ------------------------------------------------------
-
           (
             request.resource.data.status
               == 'active'
@@ -870,10 +924,6 @@ service cloud.firestore {
 
           ||
 
-          // ------------------------------------------------------
-          // RECHAZAR
-          // ------------------------------------------------------
-
           (
             request.resource.data.status
               == 'rejected'
@@ -889,13 +939,41 @@ service cloud.firestore {
 
     match /teamAssignments/{assignmentId} {
 
-      // Usuario consulta sus propias asignaciones.
-      allow read: if isSignedIn()
-        && resource.data.userId
-          == request.auth.uid;
+      // ----------------------------------------------------------
+      // LECTURA
+      // ----------------------------------------------------------
+      //
+      // Puede consultar:
+      // - el propio usuario
+      // - el encargado de ese equipo
+      // - el administrador de la liga
+      //
+      // Esto permite que el encargado consulte la plantilla
+      // únicamente de los equipos que administra.
+      // ----------------------------------------------------------
 
-      // Se crea únicamente al aceptar una
-      // invitación legítima de encargado.
+      allow read: if isSignedIn()
+        && (
+          resource.data.userId
+            == request.auth.uid
+
+          ||
+
+          isTeamManagerFromTeamDocument(
+            resource.data.teamId
+          )
+
+          ||
+
+          isLeagueAdmin(
+            resource.data.leagueId
+          )
+        );
+
+      // ----------------------------------------------------------
+      // CREAR ASIGNACIÓN DE ENCARGADO
+      // ----------------------------------------------------------
+
       allow create: if isSignedIn()
 
         && exists(
@@ -953,6 +1031,78 @@ service cloud.firestore {
 
         && request.resource.data.status
           == 'active';
+
+      // ----------------------------------------------------------
+      // CREAR ASIGNACIÓN DE JUGADOR
+      // ----------------------------------------------------------
+
+      allow create: if isSignedIn()
+
+        && isValidPlayerJoinCode(
+          assignmentId
+        )
+
+        && request.resource.data.userId
+          == request.auth.uid
+
+        && request.resource.data.userEmail
+          == currentEmail()
+
+        && request.resource.data.teamId
+          == get(
+            /databases/$(database)/documents/teamJoinCodes/$(assignmentId)
+          ).data.teamId
+
+        && request.resource.data.leagueId
+          == get(
+            /databases/$(database)/documents/teamJoinCodes/$(assignmentId)
+          ).data.leagueId
+
+        && request.resource.data.tournamentId
+          == get(
+            /databases/$(database)/documents/teamJoinCodes/$(assignmentId)
+          ).data.tournamentId
+
+        && request.resource.data.assignedByUserId
+          == get(
+            /databases/$(database)/documents/teamJoinCodes/$(assignmentId)
+          ).data.createdByUserId
+
+        && request.resource.data.role
+          == 'player'
+
+        && request.resource.data.status
+          == 'active'
+
+        && request.resource.data.joinCodeId
+          == assignmentId
+
+        && request.resource.data.createdAt
+          == request.time
+
+        && request.resource.data.acceptedAt
+          == request.time
+
+        && request.resource.data.updatedAt
+          == request.time
+
+        && existsAfter(
+          /databases/$(database)/documents/teams/$(request.resource.data.teamId)
+        )
+
+        && request.auth.uid in getAfter(
+          /databases/$(database)/documents/teams/$(request.resource.data.teamId)
+        ).data.playerUserIds
+
+        && getAfter(
+          /databases/$(database)/documents/teamJoinCodes/$(assignmentId)
+        ).data.status
+          == 'used'
+
+        && getAfter(
+          /databases/$(database)/documents/teamJoinCodes/$(assignmentId)
+        ).data.usedByUserId
+          == request.auth.uid;
 
       allow update, delete: if false;
     }
