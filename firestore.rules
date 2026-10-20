@@ -1108,6 +1108,162 @@ service cloud.firestore {
     }
 
     // ============================================================
+    // PARTIDOS DE TORNEO (CALENDARIO ROUND-ROBIN)
+    // ============================================================
+
+    match /tournamentMatches/{matchId} {
+
+      // ----------------------------------------------------------
+      // LECTURA
+      // ----------------------------------------------------------
+      //
+      // Compatible con la consulta:
+      //   .where('leagueId', isEqualTo: leagueId)
+      //   .where('tournamentId', isEqualTo: tournamentId)
+      //
+      // Firestore valida que la consulta garantice que todos los
+      // resultados cumplen la regla. Como la consulta filtra por
+      // leagueId, resource.data.leagueId queda acotado y se puede
+      // verificar que el usuario administra esa liga.
+      // ----------------------------------------------------------
+
+      allow read: if isSignedIn()
+        && isLeagueAdmin(
+          resource.data.leagueId
+        );
+
+      // ----------------------------------------------------------
+      // CREAR PARTIDO
+      // ----------------------------------------------------------
+
+      allow create: if isSignedIn()
+
+        && request.resource.data.keys().hasAll([
+          'tournamentId',
+          'leagueId',
+          'roundNumber',
+          'matchNumber',
+          'homeTeamId',
+          'homeTeamName',
+          'awayTeamId',
+          'awayTeamName',
+          'status',
+          'homeScore',
+          'awayScore',
+          'createdByUserId',
+          'createdAt',
+          'updatedAt'
+        ])
+
+        && request.resource.data.keys().hasOnly([
+          'tournamentId',
+          'leagueId',
+          'roundNumber',
+          'matchNumber',
+          'homeTeamId',
+          'homeTeamName',
+          'awayTeamId',
+          'awayTeamName',
+          'status',
+          'homeScore',
+          'awayScore',
+          'createdByUserId',
+          'createdAt',
+          'updatedAt'
+        ])
+
+        && request.resource.data.leagueId is string
+        && request.resource.data.tournamentId is string
+        && request.resource.data.homeTeamId is string
+        && request.resource.data.awayTeamId is string
+        && request.resource.data.homeTeamName is string
+        && request.resource.data.awayTeamName is string
+
+        && isLeagueAdmin(
+          request.resource.data.leagueId
+        )
+
+        && exists(
+          /databases/$(database)/documents/tournaments/$(request.resource.data.tournamentId)
+        )
+
+        && get(
+          /databases/$(database)/documents/tournaments/$(request.resource.data.tournamentId)
+        ).data.leagueId
+          == request.resource.data.leagueId
+
+        && teamExists(
+          request.resource.data.homeTeamId
+        )
+
+        && teamExists(
+          request.resource.data.awayTeamId
+        )
+
+        && teamData(
+          request.resource.data.homeTeamId
+        ).leagueId
+          == request.resource.data.leagueId
+
+        && teamData(
+          request.resource.data.awayTeamId
+        ).leagueId
+          == request.resource.data.leagueId
+
+        && teamData(
+          request.resource.data.homeTeamId
+        ).tournamentId
+          == request.resource.data.tournamentId
+
+        && teamData(
+          request.resource.data.awayTeamId
+        ).tournamentId
+          == request.resource.data.tournamentId
+
+        && request.resource.data.homeTeamId
+          != request.resource.data.awayTeamId
+
+        && request.resource.data.roundNumber is int
+        && request.resource.data.roundNumber > 0
+
+        && request.resource.data.matchNumber is int
+        && request.resource.data.matchNumber > 0
+
+        && request.resource.data.status
+          == 'scheduled'
+
+        && request.resource.data.homeScore == null
+        && request.resource.data.awayScore == null
+
+        && request.resource.data.createdByUserId
+          == request.auth.uid
+
+        && request.resource.data.createdAt
+          == request.time
+
+        && request.resource.data.updatedAt
+          == request.time;
+
+      // ----------------------------------------------------------
+      // ACTUALIZAR (los resultados se implementarán después)
+      // ----------------------------------------------------------
+
+      allow update: if false;
+
+      // ----------------------------------------------------------
+      // BORRAR (solo para regenerar calendario sin resultados)
+      // ----------------------------------------------------------
+
+      allow delete: if isSignedIn()
+        && isLeagueAdmin(
+          resource.data.leagueId
+        )
+        && resource.data.status == 'scheduled'
+        && resource.data.homeScore == null
+        && resource.data.awayScore == null;
+    }
+
+    // ============================================================
     // TODO LO DEMÁS BLOQUEADO
     // ============================================================
 

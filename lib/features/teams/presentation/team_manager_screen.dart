@@ -557,400 +557,200 @@ class TeamManagerScreen extends StatelessWidget {
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
-        final theme =
-            Theme.of(dialogContext);
-
-        final colors =
-            theme.colorScheme;
-
+        final theme = Theme.of(dialogContext);
+        final colors = theme.colorScheme;
         bool revoking = false;
 
         return StatefulBuilder(
-          builder: (
-            context,
-            setDialogState,
-          ) {
-            return AlertDialog(
-              titlePadding:
-                  const EdgeInsets.fromLTRB(
-                22,
-                22,
-                22,
-                0,
-              ),
-              contentPadding:
-                  const EdgeInsets.fromLTRB(
-                22,
-                16,
-                22,
-                8,
-              ),
-              actionsPadding:
-                  const EdgeInsets.fromLTRB(
-                16,
-                4,
-                16,
-                16,
-              ),
-              title: Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration:
-                        BoxDecoration(
-                      color: colors
-                          .primaryContainer,
-                      borderRadius:
-                          BorderRadius.circular(
-                        13,
-                      ),
-                    ),
-                    child: Icon(
-                      access.isQrAccess
-                          ? CupertinoIcons
-                              .qrcode
-                          : CupertinoIcons
-                              .envelope_fill,
-                      color:
-                          colors.primary,
-                    ),
-                  ),
-
-                  const SizedBox(
-                    width: 12,
-                  ),
-
-                  const Expanded(
-                    child: Text(
-                      'Invitación creada',
-                    ),
-                  ),
-                ],
-              ),
-              content:
-                  SingleChildScrollView(
-                child: Column(
-                  mainAxisSize:
-                      MainAxisSize.min,
-                  children: [
-                    if (access.isQrAccess) ...[
-                      Container(
-                        padding:
-                            const EdgeInsets
-                                .all(
-                          14,
-                        ),
-                        decoration:
-                            BoxDecoration(
-                          color:
-                              Colors.white,
-                          borderRadius:
-                              BorderRadius
-                                  .circular(
-                            20,
+          builder: (context, setDialogState) {
+            return Dialog(
+              insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 430, maxHeight: 720),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: Material(
+                    color: colors.surface,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(22, 22, 22, 14),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  color: colors.primaryContainer,
+                                  borderRadius: BorderRadius.circular(13),
+                                ),
+                                child: Icon(
+                                  access.isQrAccess ? CupertinoIcons.qrcode : CupertinoIcons.envelope_fill,
+                                  color: colors.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Text(
+                                  'Invitación creada',
+                                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        child: QrImageView(
-                          data:
-                              access.qrPayload,
-                          version:
-                              QrVersions
-                                  .auto,
-                          size: 210,
-                          backgroundColor:
-                              Colors.white,
-                          errorCorrectionLevel:
-                              QrErrorCorrectLevel
-                                  .M,
-                        ),
-                      ),
-
-                      const SizedBox(
-                        height: 16,
-                      ),
-
-                      const Text(
-                        'El jugador puede escanear este QR o escribir el código manual.',
-                        textAlign:
-                            TextAlign.center,
-                      ),
-
-                      const SizedBox(
-                        height: 18,
-                      ),
-                    ] else ...[
-                      Text(
-                        'Acceso reservado para:',
-                        style: theme
-                            .textTheme
-                            .bodyMedium,
-                      ),
-
-                      const SizedBox(
-                        height: 5,
-                      ),
-
-                      Text(
-                        access.invitedEmail ??
-                            '',
-                        textAlign:
-                            TextAlign.center,
-                        style: theme
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(
-                              fontWeight:
-                                  FontWeight
-                                      .w900,
-                            ),
-                      ),
-
-                      const SizedBox(
-                        height: 18,
-                      ),
-                    ],
-
-                    Text(
-                      'CÓDIGO DE ACCESO',
-                      style: theme
-                          .textTheme
-                          .labelMedium
-                          ?.copyWith(
-                            color:
-                                colors.primary,
-                            fontWeight:
-                                FontWeight
-                                    .w900,
-                            letterSpacing:
-                                1,
-                          ),
-                    ),
-
-                    const SizedBox(
-                      height: 7,
-                    ),
-
-                    Container(
-                      width:
-                          double.infinity,
-                      padding:
-                          const EdgeInsets
-                              .symmetric(
-                        horizontal: 14,
-                        vertical: 13,
-                      ),
-                      decoration:
-                          BoxDecoration(
-                        color: colors
-                            .surfaceContainerHighest,
-                        borderRadius:
-                            BorderRadius
-                                .circular(
-                          15,
-                        ),
-                      ),
-                      child: SelectableText(
-                        access.code,
-                        textAlign:
-                            TextAlign.center,
-                        style: theme
-                            .textTheme
-                            .titleLarge
-                            ?.copyWith(
-                              fontWeight:
-                                  FontWeight
-                                      .w900,
-                              letterSpacing:
-                                  1.5,
-                            ),
-                      ),
-                    ),
-
-                    const SizedBox(
-                      height: 12,
-                    ),
-
-                    SizedBox(
-                      width:
-                          double.infinity,
-                      child:
-                          OutlinedButton.icon(
-                        onPressed:
-                            revoking
-                                ? null
-                                : () async {
-                                    await Clipboard
-                                        .setData(
-                                      ClipboardData(
-                                        text:
-                                            access.code,
+                        Flexible(
+                          child: SingleChildScrollView(
+                            physics: const BouncingScrollPhysics(),
+                            padding: const EdgeInsets.fromLTRB(22, 2, 22, 16),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (access.isQrAccess) ...[
+                                  Container(
+                                    width: 238,
+                                    height: 238,
+                                    padding: const EdgeInsets.all(14),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: SizedBox(
+                                      width: 210,
+                                      height: 210,
+                                      child: QrImageView(
+                                        data: access.qrPayload,
+                                        version: QrVersions.auto,
+                                        size: 210,
+                                        padding: EdgeInsets.zero,
+                                        backgroundColor: Colors.white,
+                                        errorCorrectionLevel: QrErrorCorrectLevel.M,
                                       ),
-                                    );
-
-                                    if (!dialogContext
-                                        .mounted) {
-                                      return;
-                                    }
-
-                                    ScaffoldMessenger
-                                            .of(
-                                      dialogContext,
-                                    ).showSnackBar(
-                                      const SnackBar(
-                                        content:
-                                            Text(
-                                          'Código copiado.',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  const Text(
+                                    'El jugador puede escanear este QR o escribir el código manual.',
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 18),
+                                ] else ...[
+                                  Text('Acceso reservado para:', style: theme.textTheme.bodyMedium),
+                                  const SizedBox(height: 5),
+                                  Text(
+                                    access.invitedEmail ?? '',
+                                    textAlign: TextAlign.center,
+                                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                                  ),
+                                  const SizedBox(height: 18),
+                                ],
+                                Text(
+                                  'CÓDIGO DE ACCESO',
+                                  style: theme.textTheme.labelMedium?.copyWith(
+                                    color: colors.primary,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                                const SizedBox(height: 7),
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                                  decoration: BoxDecoration(
+                                    color: colors.surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(15),
+                                  ),
+                                  child: SelectableText(
+                                    access.code,
+                                    textAlign: TextAlign.center,
+                                    style: theme.textTheme.titleLarge?.copyWith(
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 1.5,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed: revoking ? null : () async {
+                                      await Clipboard.setData(ClipboardData(text: access.code));
+                                      if (!dialogContext.mounted) return;
+                                      ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                        const SnackBar(content: Text('Código copiado.')),
+                                      );
+                                    },
+                                    icon: const Icon(CupertinoIcons.doc_on_doc),
+                                    label: const Text('Copiar código'),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Container(
+                                  padding: const EdgeInsets.all(13),
+                                  decoration: BoxDecoration(
+                                    color: colors.surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(15),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(CupertinoIcons.shield_fill, color: colors.primary, size: 19),
+                                      const SizedBox(width: 9),
+                                      Expanded(
+                                        child: Text(
+                                          access.isEmailAccess
+                                              ? 'Solo la cuenta con el correo indicado podrá utilizar este acceso.'
+                                              : 'Este acceso no está ligado a una cuenta específica. Entrégalo únicamente al jugador que quieras registrar.',
+                                          style: theme.textTheme.bodySmall,
                                         ),
                                       ),
-                                    );
-                                  },
-                        icon: const Icon(
-                          CupertinoIcons
-                              .doc_on_doc,
-                        ),
-                        label:
-                            const Text(
-                          'Copiar código',
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(
-                      height: 10,
-                    ),
-
-                    Container(
-                      padding:
-                          const EdgeInsets
-                              .all(
-                        13,
-                      ),
-                      decoration:
-                          BoxDecoration(
-                        color: colors
-                            .surfaceContainerHighest,
-                        borderRadius:
-                            BorderRadius
-                                .circular(
-                          15,
-                        ),
-                      ),
-                      child: Row(
-                        crossAxisAlignment:
-                            CrossAxisAlignment
-                                .start,
-                        children: [
-                          Icon(
-                            CupertinoIcons
-                                .shield_fill,
-                            color:
-                                colors.primary,
-                            size: 19,
-                          ),
-                          const SizedBox(
-                            width: 9,
-                          ),
-                          Expanded(
-                            child: Text(
-                              access.isEmailAccess
-                                  ? 'Solo la cuenta con el correo indicado podrá utilizar este acceso.'
-                                  : 'Este acceso no está ligado a una cuenta específica. Entrégalo únicamente al jugador que quieras registrar.',
-                              style: theme
-                                  .textTheme
-                                  .bodySmall,
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                        const Divider(height: 1),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              TextButton(
+                                onPressed: revoking ? null : () async {
+                                  setDialogState(() { revoking = true; });
+                                  try {
+                                    await repository.revokeAccess(access.id);
+                                    if (!dialogContext.mounted) return;
+                                    Navigator.of(dialogContext).pop();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('La invitación fue revocada.')),
+                                    );
+                                  } catch (error) {
+                                    if (!dialogContext.mounted) return;
+                                    setDialogState(() { revoking = false; });
+                                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                      SnackBar(content: Text('No se pudo revocar: $error')),
+                                    );
+                                  }
+                                },
+                                child: Text(revoking ? 'Revocando...' : 'Revocar'),
+                              ),
+                              const SizedBox(width: 8),
+                              FilledButton(
+                                onPressed: revoking ? null : () => Navigator.of(dialogContext).pop(),
+                                child: const Text('Listo'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: revoking
-                      ? null
-                      : () async {
-                          setDialogState(
-                            () {
-                              revoking =
-                                  true;
-                            },
-                          );
-
-                          try {
-                            await repository
-                                .revokeAccess(
-                              access.id,
-                            );
-
-                            if (!dialogContext
-                                .mounted) {
-                              return;
-                            }
-
-                            Navigator.of(
-                              dialogContext,
-                            ).pop();
-
-                            ScaffoldMessenger
-                                    .of(
-                              context,
-                            ).showSnackBar(
-                              const SnackBar(
-                                content:
-                                    Text(
-                                  'La invitación fue revocada.',
-                                ),
-                              ),
-                            );
-                          } catch (error) {
-                            if (!dialogContext
-                                .mounted) {
-                              return;
-                            }
-
-                            setDialogState(
-                              () {
-                                revoking =
-                                    false;
-                              },
-                            );
-
-                            ScaffoldMessenger
-                                    .of(
-                              dialogContext,
-                            ).showSnackBar(
-                              SnackBar(
-                                content:
-                                    Text(
-                                  'No se pudo revocar: $error',
-                                ),
-                              ),
-                            );
-                          }
-                        },
-                  child: Text(
-                    revoking
-                        ? 'Revocando...'
-                        : 'Revocar',
-                  ),
-                ),
-
-                FilledButton(
-                  onPressed: revoking
-                      ? null
-                      : () {
-                          Navigator.of(
-                            dialogContext,
-                          ).pop();
-                        },
-                  child: const Text(
-                    'Listo',
-                  ),
-                ),
-              ],
             );
           },
         );
