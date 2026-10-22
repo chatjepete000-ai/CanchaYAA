@@ -133,6 +133,131 @@ service cloud.firestore {
         );
     }
 
+    // courts: name<=100, address<=240, city<=100, sport enum,
+    // nullable latitude/longitude, active, immutable createdBy/createdAt.
+    // courtBookings: one immutable match/court/league/start per UTC 2h block.
+    // tournamentMatches scheduling adds courtId/courtName/startsAt/bookingId.
+    function isCourtAdmin() {
+      return isSignedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'active';
+    }
+
+    function canEditCourt(data) {
+      return isCourtAdmin() && (data.createdBy == request.auth.uid
+        || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.adminScope == 'platform');
+    }
+
+    function courtText(value, maximum) {
+      return value is string && value.size() > 0 && value.size() <= maximum;
+    }
+
+    function validCourt(data) {
+      return data.keys().hasAll(['name', 'address', 'city', 'sport', 'latitude',
+          'longitude', 'active', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['name', 'address', 'city', 'sport', 'latitude',
+          'longitude', 'active', 'createdBy', 'createdAt', 'updatedAt'])
+        && courtText(data.name, 100) && courtText(data.address, 240)
+        && courtText(data.city, 100) && courtText(data.createdBy, 128)
+        && data.sport in ['Fútbol 5', 'Fútbol 7', 'Fútbol 11', 'Usos múltiples']
+        && data.active is bool
+        && ((data.latitude == null && data.longitude == null)
+          || (data.latitude is number && data.longitude is number
+            && data.latitude >= -90 && data.latitude <= 90
+            && data.longitude >= -180 && data.longitude <= 180))
+        && data.createdAt is timestamp && data.updatedAt == request.time;
+    }
+
+    match /courts/{courtId} {
+      allow read: if isSignedIn();
+      allow create: if isCourtAdmin() && validCourt(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update: if canEditCourt(resource.data) && validCourt(request.resource.data)
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if false;
+    }
+
+    function validCourtBooking(data, bookingId) {
+      return data.keys().hasAll(['courtId', 'matchId', 'leagueId', 'startsAt'])
+        && data.keys().hasOnly(['courtId', 'matchId', 'leagueId', 'startsAt'])
+        && courtText(data.courtId, 128) && courtText(data.matchId, 256)
+        && courtText(data.leagueId, 128) && data.startsAt is timestamp
+        && data.startsAt > request.time
+        && data.startsAt.toMillis() % 7200000 == 0
+        && bookingId == data.courtId + '_' + string(data.startsAt.toMillis())
+        && getAfter(/databases/$(database)/documents/tournamentMatches/$(data.matchId)).data.bookingId == bookingId
+        && getAfter(/databases/$(database)/documents/tournamentMatches/$(data.matchId)).data.leagueId == data.leagueId
+        && getAfter(/databases/$(database)/documents/tournamentMatches/$(data.matchId)).data.courtId == data.courtId
+        && getAfter(/databases/$(database)/documents/tournamentMatches/$(data.matchId)).data.startsAt == data.startsAt;
+    }
+
+    match /courtBookings/{bookingId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isLeagueAdmin(request.resource.data.leagueId)
+        && validCourtBooking(request.resource.data, bookingId);
+      allow update: if isSignedIn() && isLeagueAdmin(resource.data.leagueId)
+        && request.resource.data == resource.data
+        && validCourtBooking(request.resource.data, bookingId);
+      allow delete: if isSignedIn() && isLeagueAdmin(resource.data.leagueId)
+        && (!existsAfter(/databases/$(database)/documents/tournamentMatches/$(resource.data.matchId))
+          || !('bookingId' in getAfter(/databases/$(database)/documents/tournamentMatches/$(resource.data.matchId)).data)
+          || getAfter(/databases/$(database)/documents/tournamentMatches/$(resource.data.matchId)).data.bookingId != bookingId);
+    }
+
+    function teamSlotId(teamId, startsAt) {
+      return teamId + '_' + string(startsAt.toMillis());
+    }
+
+    function validTeamBooking(data, bookingId) {
+      let game = getAfter(/databases/$(database)/documents/tournamentMatches/$(data.matchId)).data;
+      return data.keys().hasAll(['teamId', 'matchId', 'leagueId', 'startsAt'])
+        && data.keys().hasOnly(['teamId', 'matchId', 'leagueId', 'startsAt'])
+        && courtText(data.teamId, 128) && courtText(data.matchId, 256)
+        && courtText(data.leagueId, 128) && data.startsAt is timestamp
+        && data.startsAt > request.time && data.startsAt.toMillis() % 7200000 == 0
+        && bookingId == teamSlotId(data.teamId, data.startsAt)
+        && game.leagueId == data.leagueId && game.startsAt == data.startsAt
+        && data.teamId in [game.homeTeamId, game.awayTeamId];
+    }
+
+    match /teamBookings/{bookingId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isLeagueAdmin(request.resource.data.leagueId)
+        && validTeamBooking(request.resource.data, bookingId);
+      allow update: if isSignedIn() && isLeagueAdmin(resource.data.leagueId)
+        && request.resource.data == resource.data
+        && validTeamBooking(request.resource.data, bookingId);
+      allow delete: if isSignedIn() && isLeagueAdmin(resource.data.leagueId)
+        && (!existsAfter(/databases/$(database)/documents/tournamentMatches/$(resource.data.matchId))
+          || !('startsAt' in getAfter(/databases/$(database)/documents/tournamentMatches/$(resource.data.matchId)).data)
+          || getAfter(/databases/$(database)/documents/tournamentMatches/$(resource.data.matchId)).data.startsAt != resource.data.startsAt);
+    }
+
+    function oldTeamSlotsReleased(data) {
+      return !('startsAt' in data)
+        || (!existsAfter(/databases/$(database)/documents/teamBookings/$(teamSlotId(data.homeTeamId, data.startsAt)))
+          && !existsAfter(/databases/$(database)/documents/teamBookings/$(teamSlotId(data.awayTeamId, data.startsAt))));
+    }
+
+    function validMatchVenue(data, matchId) {
+      return data.keys().hasAll(['courtId', 'courtName', 'startsAt', 'bookingId'])
+        && courtText(data.courtId, 128) && courtText(data.courtName, 100)
+        && courtText(data.bookingId, 160) && data.startsAt is timestamp
+        && data.startsAt > request.time
+        && data.startsAt.toMillis() % 7200000 == 0
+        && data.bookingId == data.courtId + '_' + string(data.startsAt.toMillis())
+        && get(/databases/$(database)/documents/courts/$(data.courtId)).data.active == true
+        && data.courtName == get(/databases/$(database)/documents/courts/$(data.courtId)).data.name
+        && getAfter(/databases/$(database)/documents/courtBookings/$(data.bookingId)).data.matchId == matchId
+        && getAfter(/databases/$(database)/documents/courtBookings/$(data.bookingId)).data.startsAt == data.startsAt
+        && getAfter(/databases/$(database)/documents/courtBookings/$(data.bookingId)).data.courtId == data.courtId
+        && getAfter(/databases/$(database)/documents/teamBookings/$(teamSlotId(data.homeTeamId, data.startsAt))).data.matchId == matchId
+        && getAfter(/databases/$(database)/documents/teamBookings/$(teamSlotId(data.awayTeamId, data.startsAt))).data.matchId == matchId
+        && data.updatedAt == request.time;
+    }
+
     // ============================================================
     // USUARIOS
     // ============================================================
@@ -1127,10 +1252,10 @@ service cloud.firestore {
       // verificar que el usuario administra esa liga.
       // ----------------------------------------------------------
 
-      allow read: if isSignedIn()
-        && isLeagueAdmin(
-          resource.data.leagueId
-        );
+      // Scheduled venue matches are visible to every signed-in player.
+      allow read: if isSignedIn() && (
+        (resource.data.status == 'scheduled' && resource.data.courtId is string)
+        || isLeagueAdmin(resource.data.leagueId));
 
       // ----------------------------------------------------------
       // CREAR PARTIDO
@@ -1248,7 +1373,17 @@ service cloud.firestore {
       // ACTUALIZAR (los resultados se implementarán después)
       // ----------------------------------------------------------
 
-      allow update: if false;
+      allow update: if isSignedIn() && isLeagueAdmin(resource.data.leagueId)
+        && resource.data.status == 'scheduled'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['courtId', 'courtName', 'startsAt', 'bookingId', 'updatedAt'])
+        && validMatchVenue(request.resource.data, matchId)
+        && (!('startsAt' in resource.data)
+          || resource.data.startsAt == request.resource.data.startsAt
+          || oldTeamSlotsReleased(resource.data))
+        && (!('bookingId' in resource.data)
+          || resource.data.bookingId == request.resource.data.bookingId
+          || !existsAfter(/databases/$(database)/documents/courtBookings/$(resource.data.bookingId)));
 
       // ----------------------------------------------------------
       // BORRAR (solo para regenerar calendario sin resultados)
@@ -1260,7 +1395,10 @@ service cloud.firestore {
         )
         && resource.data.status == 'scheduled'
         && resource.data.homeScore == null
-        && resource.data.awayScore == null;
+        && resource.data.awayScore == null
+        && oldTeamSlotsReleased(resource.data)
+        && (!('bookingId' in resource.data)
+          || !existsAfter(/databases/$(database)/documents/courtBookings/$(resource.data.bookingId)));
     }
 
            // ============================================================

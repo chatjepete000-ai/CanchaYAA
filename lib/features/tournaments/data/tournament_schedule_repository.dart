@@ -15,6 +15,9 @@ class TournamentMatchRecord {
     required this.awayTeamId,
     required this.awayTeamName,
     required this.status,
+    this.courtId,
+    this.courtName,
+    this.startsAt,
   });
 
   final String id;
@@ -32,6 +35,9 @@ class TournamentMatchRecord {
   final String awayTeamName;
 
   final String status;
+  final String? courtId;
+  final String? courtName;
+  final DateTime? startsAt;
 
   factory TournamentMatchRecord.fromMap(
     String id,
@@ -39,6 +45,9 @@ class TournamentMatchRecord {
   ) {
     return TournamentMatchRecord(
       id: id,
+      courtId: data['courtId'] as String?,
+      courtName: data['courtName'] as String?,
+      startsAt: (data['startsAt'] as Timestamp?)?.toDate(),
       tournamentId:
           (data['tournamentId'] as String?)?.trim() ?? '',
       leagueId:
@@ -353,6 +362,15 @@ class TournamentScheduleRepository {
 
     for (final doc
         in existingSnapshot.docs) {
+      final bookingId = doc.data()['bookingId'] as String?;
+      if (bookingId != null) {
+        batch.delete(_firestore.collection('courtBookings').doc(bookingId));
+        final startsAt = doc.data()['startsAt'] as Timestamp;
+        for (final key in ['homeTeamId', 'awayTeamId']) {
+          batch.delete(_firestore.collection('teamBookings').doc(
+            '${doc.data()[key]}_${startsAt.millisecondsSinceEpoch}'));
+        }
+      }
       batch.delete(
         doc.reference,
       );

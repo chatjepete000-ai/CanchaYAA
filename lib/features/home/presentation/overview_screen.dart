@@ -1,3 +1,4 @@
+import '../../courts/presentation/courts_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/cupertino.dart';
@@ -724,186 +725,66 @@ class _HomeContent extends StatelessWidget {
     );
   }
 
-  Widget _buildNearbyCourts(
-    BuildContext context, {
-    required bool isDark,
-  }) {
+  Widget _buildNearbyCourts(BuildContext context, {required bool isDark}) {
+    void explore() => Navigator.of(context).push(
+      MaterialPageRoute(
+        settings: const RouteSettings(name: '/canchas'),
+        builder: (_) => const CourtsScreen(),
+      ),
+    );
     return Column(
       children: [
         _SectionTitle(
-          icon:
-              CupertinoIcons.location_fill,
-          title: 'Canchas cercanas',
+          icon: CupertinoIcons.location_fill,
+          title: 'Canchas',
           action: 'Ver mapa',
           isDark: isDark,
-          onTap: () {
-            ScaffoldMessenger.of(context)
-                .showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Aquí conectaremos Google Maps más adelante.',
-                ),
-              ),
-            );
-          },
+          onTap: explore,
         ),
-
         const SizedBox(height: 13),
-
-        ClipRRect(
-          borderRadius:
-              BorderRadius.circular(22),
-          child: SizedBox(
-            height: 210,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Image.asset(
-                  'assets/images/home/map_preview.jpg',
+        Semantics(
+          button: true,
+          label: 'Explorar canchas en Montemorelos',
+          child: InkWell(
+            onTap: explore,
+            borderRadius: BorderRadius.circular(22),
+            child: Container(
+              height: 210,
+              width: double.infinity,
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                image: const DecorationImage(
+                  image: AssetImage('assets/images/home/map_preview.jpg'),
                   fit: BoxFit.cover,
                 ),
-
-                DecoratedBox(
-                  decoration:
-                      BoxDecoration(
-                    gradient:
-                        LinearGradient(
-                      begin:
-                          Alignment.topCenter,
-                      end:
-                          Alignment
-                              .bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black
-                            .withValues(
-                          alpha: 0.25,
-                        ),
-                      ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isDark ? _darkCard : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                  ),
-                ),
-
-                const Positioned(
-                  left: 25,
-                  top: 27,
-                  child: _MapPin(
-                    label:
-                        'Unidad Deportiva',
-                  ),
-                ),
-
-                const Positioned(
-                  right: 42,
-                  top: 55,
-                  child: _MapPin(
-                    label: 'Cancha',
-                  ),
-                ),
-
-                Positioned(
-                  left: 118,
-                  bottom: 64,
-                  child: Container(
-                    width: 20,
-                    height: 20,
-                    decoration:
-                        BoxDecoration(
-                      color: const Color(
-                        0xFF318AFF,
-                      ),
-                      shape:
-                          BoxShape.circle,
-                      border:
-                          Border.all(
-                        color:
-                            Colors.white,
-                        width: 4,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color:
-                              const Color(
-                            0xFF318AFF,
-                          ).withValues(
-                            alpha: 0.4,
-                          ),
-                          blurRadius: 13,
-                          spreadRadius: 3,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                Positioned(
-                  left: 12,
-                  right: 12,
-                  bottom: 11,
-                  child: Container(
-                    padding:
-                        const EdgeInsets
-                            .symmetric(
-                      horizontal: 13,
-                      vertical: 10,
-                    ),
-                    decoration:
-                        BoxDecoration(
-                      color: isDark
-                          ? const Color(
-                              0xE6071912,
-                            )
-                          : const Color(
-                              0xEEFFFFFF,
-                            ),
-                      borderRadius:
-                          BorderRadius
-                              .circular(
-                        14,
-                      ),
-                    ),
-                    child: Row(
+                    child: const Row(
                       children: [
-                        const Icon(
-                          CupertinoIcons
-                              .location_fill,
-                          color: _green,
-                          size: 16,
-                        ),
-
-                        const SizedBox(
-                          width: 7,
-                        ),
-
-                        const Expanded(
+                        Icon(Icons.map_outlined, color: _green),
+                        SizedBox(width: 10),
+                        Expanded(
                           child: Text(
                             'Explorar canchas en Montemorelos',
-                            maxLines: 1,
-                            overflow:
-                                TextOverflow
-                                    .ellipsis,
-                            style:
-                                TextStyle(
-                              fontWeight:
-                                  FontWeight
-                                      .w800,
-                              fontSize:
-                                  12,
-                            ),
+                            style: TextStyle(fontWeight: FontWeight.w800),
                           ),
                         ),
-
-                        const Icon(
-                          CupertinoIcons
-                              .chevron_right,
-                          color: _green,
-                          size: 15,
-                        ),
+                        Icon(Icons.arrow_forward, color: _green),
                       ],
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -1528,98 +1409,6 @@ class _SectionTitle
                 size: 13,
               ),
             ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MapPin extends StatelessWidget {
-  const _MapPin({
-    required this.label,
-  });
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize:
-          MainAxisSize.min,
-      children: [
-        Container(
-          width: 31,
-          height: 31,
-          decoration:
-              BoxDecoration(
-            color: _green,
-            shape:
-                BoxShape.circle,
-            border: Border.all(
-              color: Colors.white,
-              width: 2.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black
-                    .withValues(
-                  alpha: 0.25,
-                ),
-                blurRadius: 6,
-                offset:
-                    const Offset(
-                  0,
-                  3,
-                ),
-              ),
-            ],
-          ),
-          child: const Icon(
-            CupertinoIcons
-                .sportscourt_fill,
-            size: 14,
-            color: Colors.white,
-          ),
-        ),
-
-        const SizedBox(height: 2),
-
-        Container(
-          constraints:
-              const BoxConstraints(
-            maxWidth: 95,
-          ),
-          padding:
-              const EdgeInsets
-                  .symmetric(
-            horizontal: 6,
-            vertical: 3,
-          ),
-          decoration:
-              BoxDecoration(
-            color: const Color(
-              0xEFFFFFFF,
-            ),
-            borderRadius:
-                BorderRadius.circular(
-              6,
-            ),
-          ),
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow:
-                TextOverflow.ellipsis,
-            style:
-                const TextStyle(
-              color: Color(
-                0xFF23362B,
-              ),
-              fontSize: 8,
-              fontWeight:
-                  FontWeight.w800,
-            ),
           ),
         ),
       ],

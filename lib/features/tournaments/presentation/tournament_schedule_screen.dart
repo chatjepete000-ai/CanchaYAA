@@ -1,3 +1,5 @@
+import '../../courts/presentation/schedule_court_screen.dart';
+import '../../courts/presentation/courts_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -1437,95 +1439,28 @@ class _SavedRoundCard
   }
 }
 
-class _SavedMatchTile
-    extends StatelessWidget {
-  const _SavedMatchTile({
-    required this.match,
-  });
+class _SavedMatchTile extends StatelessWidget {
+  const _SavedMatchTile({required this.match});
 
   final TournamentMatchRecord match;
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final colors =
-        Theme.of(context)
-            .colorScheme;
-
-    return Padding(
-      padding:
-          const EdgeInsets.fromLTRB(
-        16,
-        14,
-        16,
-        14,
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      title: Text(
+        '${match.homeTeamName} vs ${match.awayTeamName}',
+        style: const TextStyle(fontWeight: FontWeight.w800),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              match.homeTeamName,
-              textAlign:
-                  TextAlign.right,
-              style:
-                  const TextStyle(
-                fontWeight:
-                    FontWeight
-                        .w800,
-              ),
-            ),
-          ),
-
-          const SizedBox(
-            width: 12,
-          ),
-
-          Container(
-            padding:
-                const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 6,
-            ),
-            decoration:
-                BoxDecoration(
-              color: colors
-                  .primaryContainer,
-              borderRadius:
-                  BorderRadius.circular(
-                12,
-              ),
-            ),
-            child: Text(
-              'VS',
-              style:
-                  TextStyle(
-                color:
-                    colors.primary,
-                fontWeight:
-                    FontWeight
-                        .w900,
-                fontSize: 12,
-              ),
-            ),
-          ),
-
-          const SizedBox(
-            width: 12,
-          ),
-
-          Expanded(
-            child: Text(
-              match.awayTeamName,
-              style:
-                  const TextStyle(
-                fontWeight:
-                    FontWeight
-                        .w800,
-              ),
-            ),
-          ),
-        ],
+      subtitle: Text(
+        match.startsAt == null
+            ? 'Sin cancha ni horario · Toca para programar'
+            : '${match.courtName ?? "Cancha"}\n${formatCourtDate(match.startsAt!)}',
+      ),
+      trailing: const Icon(Icons.edit_calendar_outlined),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ScheduleCourtScreen(match: match)),
       ),
     );
   }
