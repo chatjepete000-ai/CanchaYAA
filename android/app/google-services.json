@@ -12,7 +12,20 @@
           "package_name": "com.canchaya.cancha_ya"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "998214942076-n2lmbh6nsgj69vm9skbdsfm3cddpr4ji.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.canchaya.cancha_ya",
+            "certificate_hash": "315443efecb10c5235260d5b8cd0e3c9eccbd35f"
+          }
+        },
+        {
+          "client_id": "998214942076-28tdq39bj2fcubr58418kt6hk1qik93v.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyA3KicaYt6oWNlwUj0FthZKQ9qkCxNvECQ"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "998214942076-28tdq39bj2fcubr58418kt6hk1qik93v.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "998214942076-kl67urppf3oma16q088a740161rd127j.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.canchaya.canchaYa"
+              }
+            }
+          ]
         }
       }
     }

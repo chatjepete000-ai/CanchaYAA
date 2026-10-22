@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../core/theme/app_theme.dart';
 import '../core/theme/theme_controller.dart';
 import '../features/auth/presentation/login_screen.dart';
+import '../features/auth/presentation/authenticated_entry.dart';
 import '../features/home/presentation/home_shell.dart';
 import '../features/onboarding/presentation/intro_screen.dart';
 
@@ -108,6 +109,13 @@ class _AppEntryState
 
         if (user == null) {
           return const LoginScreen();
+        }
+
+        if (user.providerData.any((provider) => provider.providerId == 'google.com')) {
+          return AuthenticatedEntry(
+            key: ValueKey(user.uid),
+            child: HomeShell(themeController: widget.themeController),
+          );
         }
 
         return HomeShell(

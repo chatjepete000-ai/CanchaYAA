@@ -1,5 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+
+import '../data/google_auth_service.dart';
 
 import '../domain/auth_validators.dart';
 import 'register_screen.dart';
@@ -32,6 +35,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
+    if (_isLoading) return;
     final isValid =
         _formKey.currentState?.validate() ?? false;
 
@@ -175,6 +179,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
+      await FirebaseAuth.instance.setLanguageCode('es');
       await FirebaseAuth.instance.sendPasswordResetEmail(
         email: email,
       );
@@ -186,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Si existe una cuenta asociada a $email, recibirás un correo para cambiar tu contraseña.',
+            'Si existe una cuenta asociada a $email, recibirás un enlace para cambiar tu contraseña. Revisa tu bandeja de entrada y spam.',
           ),
         ),
       );
@@ -199,6 +204,10 @@ class _LoginScreenState extends State<LoginScreen> {
           'No se pudo enviar el correo de recuperación.';
 
       switch (e.code) {
+        case 'user-not-found':
+          message = 'Si existe una cuenta asociada a $email, recibirás un enlace para cambiar tu contraseña. Revisa tu bandeja de entrada y spam.';
+          break;
+
         case 'invalid-email':
           message =
               'El correo electrónico no es válido.';
@@ -262,14 +271,48 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  void _googleComingSoon() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'El acceso con Google será conectado con Firebase próximamente.',
-        ),
-      ),
-    );
+  Future<void> _loginWithGoogle() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+    try {
+      await GoogleAuthService().signIn();
+      // app.dart waits for the profile and then displays HomeShell.
+    } on GoogleSignInException catch (error) {
+      if (error.code == GoogleSignInExceptionCode.canceled) return;
+      _showAuthMessage(
+        error.code == GoogleSignInExceptionCode.clientConfigurationError
+            ? 'El acceso con Google aún no está configurado. Contacta al administrador.'
+            : 'No se pudo conectar con Google. Revisa tu conexión e inténtalo nuevamente.',
+      );
+    } on FirebaseAuthException catch (error) {
+      if (error.code == 'popup-closed-by-user' ||
+          error.code == 'cancelled-popup-request') {
+        return;
+      }
+      final message = switch (error.code) {
+        'account-exists-with-different-credential' =>
+          'Este correo ya utiliza otro método de acceso. Inicia sesión con ese método.',
+        'user-disabled' => 'Esta cuenta ha sido deshabilitada.',
+        'network-request-failed' => 'Revisa tu conexión a internet e inténtalo nuevamente.',
+        'popup-blocked' => 'Permite las ventanas emergentes para continuar con Google.',
+        'operation-not-allowed' || 'unauthorized-domain' =>
+          'El acceso con Google aún no está configurado. Contacta al administrador.',
+        'too-many-requests' => 'Demasiados intentos. Espera un momento e inténtalo nuevamente.',
+        _ => 'No se pudo iniciar sesión con Google. Inténtalo nuevamente.',
+      };
+      _showAuthMessage(message);
+    } on UnsupportedError catch (_) {
+      _showAuthMessage('Usa Android o la versión web para continuar con Google.');
+    } catch (_) {
+      _showAuthMessage('No se pudo iniciar sesión con Google. Inténtalo nuevamente.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showAuthMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -555,7 +598,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: OutlinedButton(
               onPressed: _isLoading
                   ? null
-                  : _googleComingSoon,
+                  : _loginWithGoogle,
               style: OutlinedButton.styleFrom(
                 foregroundColor:
                     const Color(0xFF202020),
@@ -721,7 +764,11 @@ class _LoginScreenState extends State<LoginScreen> {
         AutofillHints.password,
       ],
       textInputAction: TextInputAction.done,
-      validator: AuthValidators.password,
+      // Existing credentials may follow a different password policy, including
+      // passwords created by Firebase's hosted reset page.
+      validator: (value) => (value == null || value.isEmpty)
+          ? 'Ingresa tu contraseña'
+          : null,
       onFieldSubmitted: (_) {
         if (!_isLoading) {
           _login();
@@ -916,7 +963,8 @@ class _PasswordResetDialogState
           children: [
             const Text(
               'Escribe el correo asociado a tu cuenta. '
-              'Te enviaremos un enlace para crear una nueva contraseña.',
+              'Te enviaremos un enlace para crear una nueva contraseña de CanchaYA. '
+              'Puedes recibirlo en Gmail u otro servicio de correo. Revisa también spam.',
             ),
 
             const SizedBox(height: 18),
