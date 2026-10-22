@@ -4,7 +4,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/theme_controller.dart';
+import '../../notifications/data/notification_repository.dart';
+import '../../notifications/domain/app_notification.dart';
+import '../../notifications/presentation/notification_center_screen.dart';
 import '../../profile/presentation/profile_screen.dart';
+import '../../settings/presentation/account_settings_screen.dart';
 
 const Color _green = Color(0xFF0E9F57);
 const Color _greenLight = Color(0xFF47E582);
@@ -304,28 +308,11 @@ class _HomeContent extends StatelessWidget {
           ),
         ),
 
-        _ThemeToggle(
+        _NotificationBellButton(
+          key: ValueKey<String?>(
+            user?.uid,
+          ),
           isDark: isDark,
-          onTap:
-              themeController.toggleTheme,
-        ),
-
-        const SizedBox(width: 7),
-
-        _HeaderButton(
-          icon: CupertinoIcons.bell,
-          isDark: isDark,
-          showBadge: true,
-          onTap: () {
-            ScaffoldMessenger.of(context)
-                .showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Aquí aparecerán tus notificaciones.',
-                ),
-              ),
-            );
-          },
         ),
 
         const SizedBox(width: 7),
@@ -334,16 +321,99 @@ class _HomeContent extends StatelessWidget {
           user: user,
           name: name,
           isDark: isDark,
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) =>
-                    const ProfileScreen(),
-              ),
-            );
-          },
+          onTap: () =>
+              _showAccountMenu(context),
         ),
       ],
+    );
+  }
+
+  // ============================================================
+  // MENÚ DE CUENTA
+  // ============================================================
+
+  void _showAccountMenu(BuildContext context) {
+    final account = Firebase.apps.isEmpty
+        ? user
+        : (FirebaseAuth.instance
+                .currentUser ??
+            user);
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor:
+          Colors.transparent,
+      elevation: 0,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        return _AccountSheet(
+          user: account,
+          themeController:
+              themeController,
+          onOpenProfile: () {
+            Navigator.of(sheetContext)
+                .pop();
+            _openProfile(context);
+          },
+          onOpenAppearance: () {
+            Navigator.of(sheetContext)
+                .pop();
+            _showAppearanceSheet(
+              context,
+            );
+          },
+          onOpenSettings: () {
+            Navigator.of(sheetContext)
+                .pop();
+            _openSettings(context);
+          },
+        );
+      },
+    );
+  }
+
+  void _openProfile(
+    BuildContext context,
+  ) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            const ProfileScreen(),
+      ),
+    );
+  }
+
+  void _showAppearanceSheet(
+    BuildContext context,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor:
+          Colors.transparent,
+      elevation: 0,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) {
+        return _AppearanceSheet(
+          themeController:
+              themeController,
+        );
+      },
+    );
+  }
+
+  void _openSettings(
+    BuildContext context,
+  ) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            AccountSettingsScreen(
+          themeController:
+              themeController,
+        ),
+      ),
     );
   }
 
@@ -1557,125 +1627,6 @@ class _MapPin extends StatelessWidget {
   }
 }
 
-class _ThemeToggle
-    extends StatelessWidget {
-  const _ThemeToggle({
-    required this.isDark,
-    required this.onTap,
-  });
-
-  final bool isDark;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius:
-            BorderRadius.circular(100),
-        onTap: onTap,
-        child: Container(
-          width: 64,
-          height: 38,
-          padding:
-              const EdgeInsets.all(4),
-          decoration:
-              BoxDecoration(
-            color: isDark
-                ? const Color(
-                    0xFF0A2419,
-                  )
-                : const Color(
-                    0xFFEAF5EE,
-                  ),
-            borderRadius:
-                BorderRadius.circular(
-              100,
-            ),
-            border: Border.all(
-              color: isDark
-                  ? const Color(
-                      0xFF1A4934,
-                    )
-                  : const Color(
-                      0xFFD6E9DD,
-                    ),
-            ),
-          ),
-          child: Stack(
-            children: [
-              AnimatedAlign(
-                duration:
-                    const Duration(
-                  milliseconds: 220,
-                ),
-                curve:
-                    Curves.easeOutCubic,
-                alignment: isDark
-                    ? Alignment
-                        .centerRight
-                    : Alignment
-                        .centerLeft,
-                child: Container(
-                  width: 27,
-                  height: 27,
-                  decoration:
-                      BoxDecoration(
-                    color: isDark
-                        ? const Color(
-                            0xFF173D2C,
-                          )
-                        : Colors.white,
-                    shape:
-                        BoxShape.circle,
-                  ),
-                ),
-              ),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: Center(
-                      child: Icon(
-                        CupertinoIcons
-                            .sun_max_fill,
-                        size: 14,
-                        color: isDark
-                            ? const Color(
-                                0xFF657A6F,
-                              )
-                            : const Color(
-                                0xFFE2A919,
-                              ),
-                      ),
-                    ),
-                  ),
-
-                  Expanded(
-                    child: Center(
-                      child: Icon(
-                        CupertinoIcons
-                            .moon_fill,
-                        size: 14,
-                        color: isDark
-                            ? _greenLight
-                            : const Color(
-                                0xFF7A8A81,
-                              ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _HeaderButton
     extends StatelessWidget {
   const _HeaderButton({
@@ -1871,4 +1822,1521 @@ class _ProfileButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SheetSurface
+    extends StatelessWidget {
+  const _SheetSurface({
+    required this.isDark,
+    required this.child,
+  });
+
+  final bool isDark;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: isDark
+          ? _darkCard
+          : Colors.white,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius:
+            const BorderRadius.vertical(
+          top: Radius.circular(24),
+        ),
+        side: BorderSide(
+          color: isDark
+              ? const Color(0xFF17432F)
+              : const Color(0xFFDCE7E0),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding:
+              const EdgeInsets.fromLTRB(
+            18,
+            10,
+            18,
+            14,
+          ),
+          child: Column(
+            mainAxisSize:
+                MainAxisSize.min,
+            crossAxisAlignment:
+                CrossAxisAlignment
+                    .stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  decoration:
+                      BoxDecoration(
+                    color: isDark
+                        ? Colors.white
+                            .withValues(
+                            alpha: 0.18,
+                          )
+                        : Colors.black
+                            .withValues(
+                            alpha: 0.14,
+                          ),
+                    borderRadius:
+                        BorderRadius
+                            .circular(
+                      100,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              child,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetDivider
+    extends StatelessWidget {
+  const _SheetDivider({
+    required this.isDark,
+  });
+
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Divider(
+      height: 1,
+      thickness: 1,
+      color: isDark
+          ? Colors.white.withValues(
+              alpha: 0.08,
+            )
+          : Colors.black.withValues(
+              alpha: 0.07,
+            ),
+    );
+  }
+}
+
+class _AccountSheet
+    extends StatelessWidget {
+  const _AccountSheet({
+    required this.user,
+    required this.themeController,
+    required this.onOpenProfile,
+    required this.onOpenAppearance,
+    required this.onOpenSettings,
+  });
+
+  final User? user;
+  final ThemeController
+      themeController;
+
+  final VoidCallback onOpenProfile;
+  final VoidCallback onOpenAppearance;
+  final VoidCallback onOpenSettings;
+
+  String _maskEmail(String email) {
+    final clean =
+        email.trim().toLowerCase();
+
+    if (clean.isEmpty ||
+        !clean.contains('@')) {
+      return 'Correo protegido';
+    }
+
+    final atIndex =
+        clean.lastIndexOf('@');
+
+    if (atIndex <= 0) {
+      return 'Correo protegido';
+    }
+
+    final local =
+        clean.substring(0, atIndex);
+
+    final domain =
+        clean.substring(atIndex);
+
+    final visibleCount =
+        local.length >= 2 ? 2 : 1;
+
+    final visible =
+        local.substring(
+      local.length - visibleCount,
+    );
+
+    final hiddenCount =
+        local.length - visibleCount;
+
+    final hidden =
+        List<String>.filled(
+      hiddenCount > 0 ? hiddenCount : 2,
+      '•',
+    ).join();
+
+    return '$hidden$visible$domain';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark =
+        Theme.of(context).brightness ==
+            Brightness.dark;
+
+    final displayName =
+        user?.displayName?.trim();
+
+    final name = displayName != null &&
+            displayName.isNotEmpty
+        ? displayName
+        : 'Jugador';
+
+    final emailValue =
+        user?.email?.trim();
+
+    final email = emailValue != null &&
+            emailValue.isNotEmpty
+        ? _maskEmail(emailValue)
+        : 'Sin correo registrado';
+
+    final photoUrl =
+        user?.photoURL?.trim();
+
+    final primary = isDark
+        ? Colors.white
+        : const Color(0xFF0A3323);
+
+    final secondary = isDark
+        ? const Color(0xFFA6BAAF)
+        : const Color(0xFF607067);
+
+    final placeholder = Container(
+      width: 54,
+      height: 54,
+      color: isDark
+          ? _darkCardSoft
+          : const Color(0xFFD9F2E2),
+      child: const Icon(
+        CupertinoIcons.person_fill,
+        size: 26,
+        color: _green,
+      ),
+    );
+
+    return _SheetSurface(
+      isDark: isDark,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment:
+            CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              ClipRRect(
+                borderRadius:
+                    BorderRadius
+                        .circular(14),
+                child: photoUrl != null &&
+                        photoUrl
+                            .isNotEmpty
+                    ? Image.network(
+                        photoUrl,
+                        width: 54,
+                        height: 54,
+                        fit: BoxFit
+                            .cover,
+                        errorBuilder:
+                            (
+                          context,
+                          error,
+                          stackTrace,
+                        ) =>
+                                placeholder,
+                      )
+                    : placeholder,
+              ),
+
+              const SizedBox(width: 14),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment
+                          .start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow
+                              .ellipsis,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight:
+                            FontWeight
+                                .w800,
+                        letterSpacing:
+                            -0.3,
+                        color: primary,
+                      ),
+                    ),
+
+                    const SizedBox(
+                      height: 3,
+                    ),
+
+                    Text(
+                      email,
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow
+                              .ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight:
+                            FontWeight
+                                .w500,
+                        color:
+                            secondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          _SheetDivider(isDark: isDark),
+
+          _AccountMenuRow(
+            leading: const Icon(
+              CupertinoIcons
+                  .person_crop_circle,
+              size: 21,
+              color: _green,
+            ),
+            label: 'Mi perfil',
+            isDark: isDark,
+            onTap: onOpenProfile,
+          ),
+
+          _AccountMenuRow(
+            leading:
+                const _AppearanceMenuIcon(),
+            label: 'Apariencia',
+            trailingText:
+                themeController
+                        .isDarkMode
+                    ? 'Oscuro'
+                    : 'Claro',
+            isDark: isDark,
+            onTap: onOpenAppearance,
+          ),
+
+          _AccountMenuRow(
+            leading: const Icon(
+              CupertinoIcons.gear,
+              size: 21,
+              color: _green,
+            ),
+            label: 'Configuración',
+            isDark: isDark,
+            onTap: onOpenSettings,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountMenuRow
+    extends StatelessWidget {
+  const _AccountMenuRow({
+    required this.leading,
+    required this.label,
+    required this.isDark,
+    required this.onTap,
+    this.trailingText,
+  });
+
+  final Widget leading;
+  final String label;
+  final String? trailingText;
+
+  final bool isDark;
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = isDark
+        ? Colors.white
+        : const Color(0xFF0A3323);
+
+    final mutedColor = isDark
+        ? const Color(0xFF82968B)
+        : const Color(0xFF6C786F);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius:
+          BorderRadius.circular(12),
+      child: Padding(
+        padding:
+            const EdgeInsets.symmetric(
+          horizontal: 4,
+          vertical: 15,
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 28,
+              child: Center(
+                child: leading,
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 15.5,
+                  fontWeight:
+                      FontWeight.w600,
+                  color: textColor,
+                ),
+              ),
+            ),
+
+            if (trailingText != null) ...[
+              Text(
+                trailingText!,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight:
+                      FontWeight.w500,
+                  color: mutedColor,
+                ),
+              ),
+
+              const SizedBox(width: 6),
+            ],
+
+            Icon(
+              CupertinoIcons
+                  .chevron_right,
+              size: 15,
+              color: mutedColor,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AppearanceMenuIcon
+    extends StatelessWidget {
+  const _AppearanceMenuIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 28,
+      height: 24,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            top: 1,
+            child: Icon(
+              CupertinoIcons
+                  .sun_max_fill,
+              size: 16,
+              color: _gold,
+            ),
+          ),
+
+          Positioned(
+            right: 0,
+            bottom: 1,
+            child: Icon(
+              CupertinoIcons.moon_fill,
+              size: 15,
+              color: _green,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AppearanceSheet
+    extends StatefulWidget {
+  const _AppearanceSheet({
+    required this.themeController,
+  });
+
+  final ThemeController
+      themeController;
+
+  @override
+  State<_AppearanceSheet>
+      createState() =>
+          _AppearanceSheetState();
+}
+
+class _AppearanceSheetState
+    extends State<_AppearanceSheet> {
+  void _select({
+    required bool dark,
+  }) {
+    if (dark) {
+      widget.themeController
+          .setDarkMode();
+    } else {
+      widget.themeController
+          .setLightMode();
+    }
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark =
+        Theme.of(context).brightness ==
+            Brightness.dark;
+
+    final selectedDark =
+        widget.themeController
+            .isDarkMode;
+
+    final primary = isDark
+        ? Colors.white
+        : const Color(0xFF0A3323);
+
+    final secondary = isDark
+        ? const Color(0xFFA6BAAF)
+        : const Color(0xFF607067);
+
+    return _SheetSurface(
+      isDark: isDark,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment:
+            CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Apariencia',
+            style: TextStyle(
+              fontSize: 19,
+              fontWeight:
+                  FontWeight.w800,
+              letterSpacing: -0.3,
+              color: primary,
+            ),
+          ),
+
+          const SizedBox(height: 4),
+
+          Text(
+            'Elige cómo quieres ver CanchaYA.',
+            style: TextStyle(
+              fontSize: 13.5,
+              fontWeight:
+                  FontWeight.w500,
+              color: secondary,
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
+          _SheetDivider(isDark: isDark),
+
+          _AppearanceOption(
+            icon:
+                CupertinoIcons.sun_max,
+            label: 'Claro',
+            selected: !selectedDark,
+            isDark: isDark,
+            onTap: () =>
+                _select(dark: false),
+          ),
+
+          _AppearanceOption(
+            icon: CupertinoIcons.moon,
+            label: 'Oscuro',
+            selected: selectedDark,
+            isDark: isDark,
+            onTap: () =>
+                _select(dark: true),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AppearanceOption
+    extends StatelessWidget {
+  const _AppearanceOption({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+
+  final bool selected;
+  final bool isDark;
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = isDark
+        ? Colors.white
+        : const Color(0xFF0A3323);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius:
+          BorderRadius.circular(12),
+      child: Padding(
+        padding:
+            const EdgeInsets.symmetric(
+          horizontal: 4,
+          vertical: 15,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 21,
+              color: _green,
+            ),
+
+            const SizedBox(width: 14),
+
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 15.5,
+                  fontWeight:
+                      FontWeight.w600,
+                  color: textColor,
+                ),
+              ),
+            ),
+
+            Icon(
+              selected
+                  ? CupertinoIcons
+                      .largecircle_fill_circle
+                  : CupertinoIcons
+                      .circle,
+              size: 22,
+              color: selected
+                  ? _green
+                  : (isDark
+                      ? const Color(
+                          0xFF4F6459,
+                        )
+                      : const Color(
+                          0xFFB3C0B8,
+                        )),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// CAMPANA DE NOTIFICACIONES + PANEL DESPLEGABLE
+// ============================================================
+
+class _NotificationBellButton
+    extends StatefulWidget {
+  const _NotificationBellButton({
+    super.key,
+    required this.isDark,
+  });
+
+  final bool isDark;
+
+  @override
+  State<_NotificationBellButton>
+      createState() =>
+          _NotificationBellButtonState();
+}
+
+class _NotificationBellButtonState
+    extends State<_NotificationBellButton> {
+  final LayerLink _layerLink =
+      LayerLink();
+
+  final GlobalKey _bellKey =
+      GlobalKey();
+
+  NotificationRepository? _repository;
+
+  Stream<int>? _unreadStream;
+
+  Stream<List<AppNotification>>?
+      _notificationsStream;
+
+  OverlayEntry? _overlayEntry;
+
+  bool get _isOpen =>
+      _overlayEntry != null;
+
+  @override
+  void initState() {
+    super.initState();
+
+    if (Firebase.apps.isNotEmpty &&
+        FirebaseAuth.instance
+                .currentUser !=
+            null) {
+      final repository =
+          NotificationRepository();
+
+      _repository = repository;
+      _unreadStream =
+          repository.watchUnreadCount();
+    }
+  }
+
+  @override
+  void dispose() {
+    _overlayEntry?.remove();
+    _overlayEntry?.dispose();
+    _overlayEntry = null;
+
+    super.dispose();
+  }
+
+  void _toggleNotifications() {
+    if (_isOpen) {
+      _closeNotifications();
+    } else {
+      _openNotifications();
+    }
+  }
+
+  void _openNotifications() {
+    final overlay = Overlay.maybeOf(
+      context,
+      rootOverlay: true,
+    );
+
+    if (overlay == null) return;
+
+    _notificationsStream =
+        _repository
+            ?.watchCurrentUserNotifications(
+      maxItems: 5,
+    );
+
+    final entry = OverlayEntry(
+      builder: _buildOverlay,
+    );
+
+    _overlayEntry = entry;
+
+    overlay.insert(entry);
+
+    setState(() {});
+  }
+
+  void _closeNotifications() {
+    _overlayEntry?.remove();
+    _overlayEntry?.dispose();
+    _overlayEntry = null;
+    _notificationsStream = null;
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _openAllNotifications() {
+    _closeNotifications();
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            const NotificationCenterScreen(),
+      ),
+    );
+  }
+
+  Future<void> _openNotification(
+    AppNotification notification,
+  ) async {
+    final repository = _repository;
+    final messenger =
+        ScaffoldMessenger.maybeOf(
+      context,
+    );
+
+    if (notification.unread &&
+        repository != null) {
+      try {
+        await repository.markAsRead(
+          notification.id,
+        );
+      } catch (_) {
+        messenger?.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No se pudo marcar la notificación como leída.',
+            ),
+          ),
+        );
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    _closeNotifications();
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            const NotificationCenterScreen(),
+      ),
+    );
+  }
+
+  Widget _buildOverlay(
+    BuildContext overlayContext,
+  ) {
+    final isDark =
+        Theme.of(overlayContext)
+                .brightness ==
+            Brightness.dark;
+
+    final screenSize =
+        MediaQuery.sizeOf(
+      overlayContext,
+    );
+
+    final screenWidth =
+        screenSize.width;
+
+    final panelWidth =
+        screenWidth < 390
+            ? screenWidth - 24
+            : 360.0;
+
+    final maxPanelHeight =
+        screenSize.height * 0.65 < 440
+            ? screenSize.height * 0.65
+            : 440.0;
+
+    var offsetX = 0.0;
+    var offsetY = 49.0;
+
+    final renderObject = _bellKey
+        .currentContext
+        ?.findRenderObject();
+
+    if (renderObject is RenderBox &&
+        renderObject.attached &&
+        renderObject.hasSize) {
+      final origin =
+          renderObject.localToGlobal(
+        Offset.zero,
+      );
+
+      final maxLeft =
+          screenWidth - panelWidth - 12;
+
+      final left = (origin.dx +
+              renderObject.size.width -
+              panelWidth)
+          .clamp(
+            12.0,
+            maxLeft < 12.0
+                ? 12.0
+                : maxLeft,
+          )
+          .toDouble();
+
+      offsetX = left - origin.dx;
+      offsetY =
+          renderObject.size.height + 10;
+    }
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            behavior:
+                HitTestBehavior.opaque,
+            onTap: _closeNotifications,
+            child:
+                const SizedBox.expand(),
+          ),
+        ),
+
+        CompositedTransformFollower(
+          link: _layerLink,
+          showWhenUnlinked: false,
+          targetAnchor:
+              Alignment.topLeft,
+          followerAnchor:
+              Alignment.topLeft,
+          offset: Offset(
+            offsetX,
+            offsetY,
+          ),
+          child: SizedBox(
+            width: panelWidth,
+            child: _buildPanel(
+              isDark: isDark,
+              maxHeight: maxPanelHeight,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPanel({
+    required bool isDark,
+    required double maxHeight,
+  }) {
+    final primary = isDark
+        ? Colors.white
+        : const Color(0xFF0A3323);
+
+    return Material(
+      color: isDark
+          ? _darkCard
+          : Colors.white,
+      elevation: isDark ? 0 : 10,
+      shadowColor: Colors.black
+          .withValues(alpha: 0.22),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.circular(20),
+        side: BorderSide(
+          color: isDark
+              ? const Color(0xFF17432F)
+              : const Color(0xFFDCE7E0),
+        ),
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: maxHeight,
+        ),
+        child: Column(
+          mainAxisSize:
+              MainAxisSize.min,
+          crossAxisAlignment:
+              CrossAxisAlignment
+                  .stretch,
+          children: [
+            Padding(
+              padding:
+                  const EdgeInsets
+                      .fromLTRB(
+                16,
+                8,
+                8,
+                8,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Notificaciones',
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow
+                              .ellipsis,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight:
+                            FontWeight
+                                .w800,
+                        letterSpacing:
+                            -0.2,
+                        color: primary,
+                      ),
+                    ),
+                  ),
+
+                  TextButton(
+                    onPressed:
+                        _openAllNotifications,
+                    style: TextButton
+                        .styleFrom(
+                      foregroundColor:
+                          _green,
+                      padding:
+                          const EdgeInsets
+                              .symmetric(
+                        horizontal: 10,
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize:
+                          MainAxisSize
+                              .min,
+                      children: [
+                        Text(
+                          'Ver todas',
+                          style:
+                              TextStyle(
+                            fontSize:
+                                12.5,
+                            fontWeight:
+                                FontWeight
+                                    .w800,
+                          ),
+                        ),
+
+                        SizedBox(
+                          width: 3,
+                        ),
+
+                        Icon(
+                          CupertinoIcons
+                              .chevron_right,
+                          size: 13,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            _SheetDivider(
+              isDark: isDark,
+            ),
+
+            Flexible(
+              child: _buildContent(
+                isDark: isDark,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent({
+    required bool isDark,
+  }) {
+    const errorText =
+        'No se pudieron cargar las notificaciones.';
+
+    final stream =
+        _notificationsStream;
+
+    if (stream == null) {
+      return _PanelMessage(
+        icon: CupertinoIcons
+            .exclamationmark_circle,
+        text: errorText,
+        isDark: isDark,
+      );
+    }
+
+    return StreamBuilder<
+        List<AppNotification>>(
+      stream: stream,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _PanelMessage(
+            icon: CupertinoIcons
+                .exclamationmark_circle,
+            text: errorText,
+            isDark: isDark,
+          );
+        }
+
+        final items = snapshot.data;
+
+        if (items == null) {
+          return const Padding(
+            padding:
+                EdgeInsets.symmetric(
+              vertical: 30,
+            ),
+            child: Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child:
+                    CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: _green,
+                ),
+              ),
+            ),
+          );
+        }
+
+        if (items.isEmpty) {
+          return _PanelMessage(
+            icon:
+                CupertinoIcons.bell,
+            text:
+                'No tienes notificaciones nuevas.',
+            isDark: isDark,
+          );
+        }
+
+        return ListView.separated(
+          shrinkWrap: true,
+          padding: EdgeInsets.zero,
+          itemCount: items.length,
+          separatorBuilder: (_, _) =>
+              _SheetDivider(
+            isDark: isDark,
+          ),
+          itemBuilder: (_, index) {
+            final notification =
+                items[index];
+
+            return _NotificationTile(
+              notification:
+                  notification,
+              isDark: isDark,
+              onTap: () =>
+                  _openNotification(
+                notification,
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: KeyedSubtree(
+        key: _bellKey,
+        child: StreamBuilder<int>(
+          stream: _unreadStream,
+          initialData: 0,
+          builder: (context, snapshot) {
+            final unreadCount =
+                snapshot.data ?? 0;
+
+            return _HeaderButton(
+              icon: CupertinoIcons.bell,
+              isDark: widget.isDark,
+              showBadge:
+                  unreadCount > 0,
+              onTap:
+                  _toggleNotifications,
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _NotificationTile
+    extends StatelessWidget {
+  const _NotificationTile({
+    required this.notification,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final AppNotification notification;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final unread =
+        notification.unread;
+
+    final typeLabel = _text(
+      notification.type.label,
+    );
+
+    final titleText = _text(
+      notification.title,
+    );
+
+    final title = titleText.isNotEmpty
+        ? titleText
+        : typeLabel;
+
+    final body = _text(
+      notification.body,
+    );
+
+    final time = _relativeTime(
+      notification.createdAt,
+    );
+
+    final meta = time.isEmpty
+        ? typeLabel
+        : '$typeLabel · $time';
+
+    final typeName =
+        notification.type.name;
+
+    final accent = typeName ==
+                'tournamentUpdate' ||
+            typeName == 'resultPublished'
+        ? _gold
+        : _green;
+
+    final primary = isDark
+        ? Colors.white
+        : const Color(0xFF0A3323);
+
+    final secondary = isDark
+        ? const Color(0xFFA6BAAF)
+        : const Color(0xFF607067);
+
+    final muted = isDark
+        ? const Color(0xFF82968B)
+        : const Color(0xFF6C786F);
+
+    return Material(
+      color: unread
+          ? _green.withValues(
+              alpha: isDark
+                  ? 0.10
+                  : 0.07,
+            )
+          : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding:
+              const EdgeInsets.fromLTRB(
+            14,
+            12,
+            12,
+            12,
+          ),
+          child: Row(
+            crossAxisAlignment:
+                CrossAxisAlignment
+                    .start,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration:
+                    BoxDecoration(
+                  color: accent
+                      .withValues(
+                    alpha: 0.14,
+                  ),
+                  borderRadius:
+                      BorderRadius
+                          .circular(12),
+                ),
+                child: Icon(
+                  _notificationIcon(
+                    typeName,
+                  ),
+                  size: 18,
+                  color: accent,
+                ),
+              ),
+
+              const SizedBox(width: 12),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment
+                          .start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow:
+                                TextOverflow
+                                    .ellipsis,
+                            style:
+                                TextStyle(
+                              fontSize:
+                                  14,
+                              fontWeight: unread
+                                  ? FontWeight
+                                      .w800
+                                  : FontWeight
+                                      .w600,
+                              color:
+                                  primary,
+                            ),
+                          ),
+                        ),
+
+                        if (unread) ...[
+                          const SizedBox(
+                            width: 8,
+                          ),
+
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration:
+                                const BoxDecoration(
+                              color:
+                                  _green,
+                              shape: BoxShape
+                                  .circle,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+
+                    if (body
+                        .isNotEmpty) ...[
+                      const SizedBox(
+                        height: 2,
+                      ),
+
+                      Text(
+                        body,
+                        maxLines: 2,
+                        overflow:
+                            TextOverflow
+                                .ellipsis,
+                        style:
+                            TextStyle(
+                          fontSize: 12.5,
+                          height: 1.3,
+                          color: unread
+                              ? secondary
+                              : muted,
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(
+                      height: 4,
+                    ),
+
+                    Text(
+                      meta,
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow
+                              .ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight:
+                            FontWeight
+                                .w600,
+                        color: muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 6),
+
+              Padding(
+                padding:
+                    const EdgeInsets
+                        .only(top: 10),
+                child: Icon(
+                  CupertinoIcons
+                      .chevron_right,
+                  size: 14,
+                  color: muted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PanelMessage
+    extends StatelessWidget {
+  const _PanelMessage({
+    required this.icon,
+    required this.text,
+    required this.isDark,
+  });
+
+  final IconData icon;
+  final String text;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = isDark
+        ? const Color(0xFF82968B)
+        : const Color(0xFF6C786F);
+
+    return Padding(
+      padding:
+          const EdgeInsets.symmetric(
+        horizontal: 20,
+        vertical: 26,
+      ),
+      child: Column(
+        mainAxisSize:
+            MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 28,
+            color: muted,
+          ),
+
+          const SizedBox(height: 10),
+
+          Text(
+            text,
+            textAlign:
+                TextAlign.center,
+            style: TextStyle(
+              fontSize: 13.5,
+              fontWeight:
+                  FontWeight.w500,
+              color: muted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _text(Object? value) {
+  return value?.toString().trim() ??
+      '';
+}
+
+IconData _notificationIcon(
+  String typeName,
+) {
+  switch (typeName) {
+    case 'teamInvitation':
+      return CupertinoIcons
+          .person_add_solid;
+    case 'invitationAccepted':
+      return CupertinoIcons
+          .check_mark_circled_solid;
+    case 'invitationRejected':
+      return CupertinoIcons
+          .xmark_circle_fill;
+    case 'teamUpdate':
+      return CupertinoIcons
+          .person_2_fill;
+    case 'matchCreated':
+      return CupertinoIcons
+          .sportscourt_fill;
+    case 'matchUpdated':
+      return CupertinoIcons
+          .arrow_2_circlepath;
+    case 'matchReminder':
+      return CupertinoIcons.clock_fill;
+    case 'tournamentUpdate':
+      return CupertinoIcons.star_fill;
+    case 'resultPublished':
+      return CupertinoIcons.flag_fill;
+    default:
+      return CupertinoIcons.bell_fill;
+  }
+}
+
+String _relativeTime(
+  DateTime? createdAt,
+) {
+  if (createdAt == null) {
+    return '';
+  }
+
+  final difference = DateTime.now()
+      .difference(createdAt);
+
+  if (difference.inMinutes < 1) {
+    return 'Ahora';
+  }
+
+  if (difference.inMinutes < 60) {
+    return '${difference.inMinutes} min';
+  }
+
+  if (difference.inHours < 24) {
+    return '${difference.inHours} h';
+  }
+
+  if (difference.inDays == 1) {
+    return 'Ayer';
+  }
+
+  if (difference.inDays < 7) {
+    return '${difference.inDays} d';
+  }
+
+  final day = createdAt.day
+      .toString()
+      .padLeft(2, '0');
+
+  final month = createdAt.month
+      .toString()
+      .padLeft(2, '0');
+
+  return '$day/$month/${createdAt.year}';
 }

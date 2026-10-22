@@ -1263,6 +1263,212 @@ service cloud.firestore {
         && resource.data.awayScore == null;
     }
 
+           // ============================================================
+    // NOTIFICACIONES
+    // ============================================================
+
+    match /notifications/{notificationId} {
+
+      // Cada usuario solo puede leer las notificaciones
+      // que fueron creadas específicamente para su UID.
+      //
+      // Compatible con consultas como:
+      //   .where('recipientUserId', isEqualTo: request.auth.uid)
+      allow read: if isSignedIn()
+        && resource.data.recipientUserId
+          == request.auth.uid;
+
+      // Las notificaciones se crearán únicamente desde un entorno
+      // confiable del servidor. El cliente Flutter no puede
+      // fabricar notificaciones arbitrarias.
+      allow create: if false;
+
+      // El usuario destinatario únicamente puede cambiar una
+      // notificación de no leída -> leída.
+      //
+      // No puede modificar:
+      // - recipientUserId
+      // - title
+      // - body
+      // - type
+      // - senderUserId
+      // - teamId
+      // - tournamentId
+      // - matchId
+      // - invitationId
+      // - route
+      // - data
+      // - createdAt
+      allow update: if isSignedIn()
+
+        && resource.data.recipientUserId
+          == request.auth.uid
+
+        && request.resource.data.recipientUserId
+          == resource.data.recipientUserId
+
+        && resource.data.isRead == false
+
+        && request.resource.data.isRead == true
+
+        && request.resource.data.readAt
+          == request.time
+
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'isRead',
+            'readAt'
+          ]);
+
+      // Las notificaciones forman parte del historial de la cuenta
+      // y no se eliminan desde el cliente.
+      allow delete: if false;
+    }    
+
+
+    // ============================================================
+    // DISPOSITIVOS PUSH DEL USUARIO
+    // ============================================================
+
+    match /users/{userId}/pushDevices/{installationId} {
+
+      // El propio usuario puede consultar un dispositivo concreto.
+      // No se permite listar la colección para evitar exponer tokens.
+      allow get: if isOwner(userId);
+      allow list: if false;
+
+      // Cada usuario únicamente puede registrar dispositivos
+      // dentro de su propia cuenta.
+      allow create: if isOwner(userId)
+
+        && request.resource.data.keys().hasAll([
+          'userId',
+          'installationId',
+          'fcmToken',
+          'platform',
+          'enabled',
+          'permissionStatus',
+          'createdAt',
+          'lastSeenAt',
+          'updatedAt'
+        ])
+
+        && request.resource.data.keys().hasOnly([
+          'userId',
+          'installationId',
+          'fcmToken',
+          'platform',
+          'enabled',
+          'permissionStatus',
+          'createdAt',
+          'lastSeenAt',
+          'updatedAt'
+        ])
+
+        && request.resource.data.userId
+          == request.auth.uid
+
+        && request.resource.data.installationId
+          == installationId
+
+        && request.resource.data.fcmToken is string
+        && request.resource.data.fcmToken.size() > 0
+
+        && request.resource.data.platform
+          in [
+            'android',
+            'ios',
+            'macos'
+          ]
+
+        && request.resource.data.enabled is bool
+
+        && request.resource.data.permissionStatus
+          in [
+            'authorized',
+            'denied',
+            'notDetermined',
+            'provisional'
+          ]
+
+        && request.resource.data.createdAt
+          == request.time
+
+        && request.resource.data.lastSeenAt
+          == request.time
+
+        && request.resource.data.updatedAt
+          == request.time;
+
+      // El dueño puede renovar el token o actualizar el estado
+      // del mismo dispositivo, pero no cambiar su identidad.
+      allow update: if isOwner(userId)
+
+        && resource.data.userId
+          == request.auth.uid
+
+        && request.resource.data.userId
+          == resource.data.userId
+
+        && request.resource.data.installationId
+          == resource.data.installationId
+
+        && request.resource.data.installationId
+          == installationId
+
+        && request.resource.data.createdAt
+          == resource.data.createdAt
+
+        && request.resource.data.fcmToken is string
+        && request.resource.data.fcmToken.size() > 0
+
+        && request.resource.data.platform
+          in [
+            'android',
+            'ios',
+            'macos'
+          ]
+
+        && request.resource.data.enabled is bool
+
+        && request.resource.data.permissionStatus
+          in [
+            'authorized',
+            'denied',
+            'notDetermined',
+            'provisional'
+          ]
+
+        && request.resource.data.lastSeenAt
+          == request.time
+
+        && request.resource.data.updatedAt
+          == request.time
+
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'fcmToken',
+            'platform',
+            'enabled',
+            'permissionStatus',
+            'lastSeenAt',
+            'updatedAt'
+          ]);
+
+      // Al cerrar sesión podemos quitar ese dispositivo
+      // de la cuenta actual.
+      allow delete: if isOwner(userId)
+        && resource.data.userId
+          == request.auth.uid
+        && resource.data.installationId
+          == installationId;
+    }
+
+
     // ============================================================
     // TODO LO DEMÁS BLOQUEADO
     // ============================================================
