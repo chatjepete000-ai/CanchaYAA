@@ -258,6 +258,100 @@ service cloud.firestore {
         && data.updatedAt == request.time;
     }
 
+    // ------------------------------------------------------------
+    // DATOS VISUALES DE EQUIPOS (shortName / logoUrl)
+    // ------------------------------------------------------------
+    //
+    // shortName: '' (sin abreviación) o de 2 a 20 caracteres.
+    // logoUrl:   '' (escudo genérico) o URL HTTPS de máximo 2048
+    //            caracteres.
+    //
+    // Los equipos históricos pueden NO tener shortName; por eso las
+    // validaciones solo se aplican a los campos que realmente cambian.
+    // ------------------------------------------------------------
+
+    function validTeamShortName(value) {
+      return value is string
+        && (value.size() == 0
+          || (value.size() >= 2 && value.size() <= 20));
+    }
+
+    function validTeamLogoUrl(value) {
+      return value is string
+        && (value.size() == 0
+          || (value.size() <= 2048
+            && value.matches('https://[^ ]+')));
+    }
+
+    function validTeamVisualUpdate(newData, oldData) {
+      let changed = newData.diff(oldData).affectedKeys();
+      return changed.hasOnly(['shortName', 'logoUrl', 'updatedAt'])
+        && newData.updatedAt == request.time
+        && (!changed.hasAny(['shortName'])
+          || validTeamShortName(newData.shortName))
+        && (!changed.hasAny(['logoUrl'])
+          || validTeamLogoUrl(newData.logoUrl));
+    }
+
+    // ------------------------------------------------------------
+    // EQUIPOS PÚBLICOS (publicTeams/{teamId})
+    // ------------------------------------------------------------
+    //
+    // Espejo seguro de teams/{teamId}. Se valida contra el estado
+    // FINAL del equipo (getAfter) porque la app actualiza teams y
+    // publicTeams en el mismo batch.
+    // ------------------------------------------------------------
+
+    function teamPublicShortName(team) {
+      return ('shortName' in team && team.shortName is string)
+        ? team.shortName
+        : '';
+    }
+
+    function teamPublicLogoUrl(team) {
+      return ('logoUrl' in team && team.logoUrl is string)
+        ? team.logoUrl
+        : '';
+    }
+
+    function canWritePublicTeam(teamId, leagueId) {
+      return isLeagueAdmin(leagueId)
+        || isTeamManagerFromTeamDocument(teamId);
+    }
+
+    function validPublicTeam(data, teamId) {
+      let team = getAfter(/databases/$(database)/documents/teams/$(teamId)).data;
+      return existsAfter(/databases/$(database)/documents/teams/$(teamId))
+        && data.keys().hasAll(['name', 'shortName', 'logoUrl',
+          'leagueId', 'tournamentId', 'updatedAt'])
+        && data.keys().hasOnly(['name', 'shortName', 'logoUrl',
+          'leagueId', 'tournamentId', 'updatedAt'])
+        && data.name is string && data.name.size() > 0
+        && validTeamShortName(data.shortName)
+        && validTeamLogoUrl(data.logoUrl)
+        && data.leagueId is string
+        && data.tournamentId is string
+        && data.updatedAt == request.time
+        && data.name == team.name
+        && data.shortName == teamPublicShortName(team)
+        && data.logoUrl == teamPublicLogoUrl(team)
+        && data.leagueId == team.leagueId
+        && data.tournamentId == team.tournamentId;
+    }
+
+    // publicTeams/{teamId} debe existir al terminar el batch y
+    // coincidir con el estado FINAL de teams/{teamId}
+    // (name, shortName, logoUrl, leagueId, tournamentId y
+    // updatedAt == request.time). Funciona también cuando la ficha
+    // pública se crea dentro del mismo batch.
+    function publicTeamMatchesTeamAfter(teamId) {
+      return existsAfter(/databases/$(database)/documents/publicTeams/$(teamId))
+        && validPublicTeam(
+          getAfter(/databases/$(database)/documents/publicTeams/$(teamId)).data,
+          teamId
+        );
+    }
+
     // ============================================================
     // USUARIOS
     // ============================================================
@@ -376,10 +470,21 @@ service cloud.firestore {
         && request.resource.data.tournamentId is string
         && request.resource.data.status == 'active'
         && request.resource.data.managerUserIds is list
-        && request.resource.data.playerUserIds is list;
+        && request.resource.data.playerUserIds is list
+        && validTeamShortName(
+          request.resource.data.shortName
+        )
+        && validTeamLogoUrl(
+          request.resource.data.logoUrl
+        );
 
       // ----------------------------------------------------------
       // ADMIN DE LIGA
+      // ----------------------------------------------------------
+      //
+      // logoUrl y shortName NO se modifican por esta regla; se
+      // controlan exclusivamente en EDICIÓN VISUAL para mantener
+      // sincronizado publicTeams/{teamId}.
       // ----------------------------------------------------------
 
       allow update: if isSignedIn()
@@ -399,7 +504,6 @@ service cloud.firestore {
           .affectedKeys()
           .hasOnly([
             'name',
-            'logoUrl',
             'uniformDescription',
             'managerUserIds',
             'playerUserIds',
@@ -411,6 +515,11 @@ service cloud.firestore {
 
       // ----------------------------------------------------------
       // ENCARGADO YA REGISTRADO
+      // ----------------------------------------------------------
+      //
+      // Conserva la funcionalidad previa (name y uniformDescription).
+      // logoUrl y shortName se controlan exclusivamente en
+      // EDICIÓN VISUAL.
       // ----------------------------------------------------------
 
       allow update: if isSignedIn()
@@ -438,10 +547,42 @@ service cloud.firestore {
           .affectedKeys()
           .hasOnly([
             'name',
-            'logoUrl',
             'uniformDescription',
             'updatedAt'
           ]);
+
+      // ----------------------------------------------------------
+      // EDICIÓN VISUAL (NOMBRE CORTO Y ESCUDO)
+      // ----------------------------------------------------------
+      //
+      // Administrador de la liga o encargado de ESE equipo.
+      // Solo pueden cambiar: shortName, logoUrl y updatedAt.
+      // En el MISMO batch debe quedar publicTeams/{teamId}
+      // sincronizado con el estado final del equipo.
+      // No toca name, leagueId, tournamentId, status, managerUserIds,
+      // playerUserIds, createdByUserId ni createdAt.
+      // ----------------------------------------------------------
+
+      allow update: if isSignedIn()
+
+        && (
+          isLeagueAdmin(
+            resource.data.leagueId
+          )
+          ||
+          isTeamManagerFromTeamDocument(
+            teamId
+          )
+        )
+
+        && validTeamVisualUpdate(
+          request.resource.data,
+          resource.data
+        )
+
+        && publicTeamMatchesTeamAfter(
+          teamId
+        );
 
       // ----------------------------------------------------------
       // PRIMER ENLACE DEL ENCARGADO AL EQUIPO
@@ -605,6 +746,55 @@ service cloud.firestore {
             'lastPlayerJoinCodeId',
             'updatedAt'
           ]);
+
+      allow delete: if false;
+    }
+
+    // ============================================================
+    // EQUIPOS PÚBLICOS (SOLO DATOS VISUALES)
+    // ============================================================
+    //
+    // Cualquier usuario autenticado puede leer nombre, nombre corto
+    // y escudo para mostrar el calendario. Solo el administrador de
+    // la liga o el encargado de ese equipo puede crear/actualizar la
+    // ficha, y siempre debe coincidir con teams/{teamId}.
+    // ============================================================
+
+    match /publicTeams/{teamId} {
+
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+
+        && request.resource.data.leagueId is string
+
+        && canWritePublicTeam(
+          teamId,
+          request.resource.data.leagueId
+        )
+
+        && validPublicTeam(
+          request.resource.data,
+          teamId
+        );
+
+      allow update: if isSignedIn()
+
+        && request.resource.data.leagueId
+          == resource.data.leagueId
+
+        && request.resource.data.tournamentId
+          == resource.data.tournamentId
+
+        && canWritePublicTeam(
+          teamId,
+          resource.data.leagueId
+        )
+
+        && validPublicTeam(
+          request.resource.data,
+          teamId
+        );
 
       allow delete: if false;
     }
