@@ -6,9 +6,12 @@ import '../data/team_repository.dart';
 import '../domain/team_models.dart';
 import 'player_join_screen.dart';
 import 'team_manager_screen.dart';
+import 'widgets/team_match_panel.dart';
 
 class TeamsScreen extends StatefulWidget {
-  const TeamsScreen({super.key});
+  const TeamsScreen({
+    super.key,
+  });
 
   @override
   State<TeamsScreen> createState() =>
@@ -17,7 +20,8 @@ class TeamsScreen extends StatefulWidget {
 
 class _TeamsScreenState
     extends State<TeamsScreen> {
-  late final TeamRepository _repository;
+  late final TeamRepository
+      _repository;
 
   Future<void>? _syncFuture;
 
@@ -26,7 +30,8 @@ class _TeamsScreenState
     super.initState();
 
     if (Firebase.apps.isNotEmpty) {
-      _repository = TeamRepository();
+      _repository =
+          TeamRepository();
 
       _syncFuture =
           _repository
@@ -35,7 +40,9 @@ class _TeamsScreenState
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     if (Firebase.apps.isEmpty) {
       return const _TeamsEmptyState();
     }
@@ -46,7 +53,8 @@ class _TeamsScreenState
         context,
         syncSnapshot,
       ) {
-        if (syncSnapshot.connectionState ==
+        if (syncSnapshot
+                .connectionState ==
             ConnectionState.waiting) {
           return const Center(
             child:
@@ -56,13 +64,16 @@ class _TeamsScreenState
 
         if (syncSnapshot.hasError) {
           return _SyncErrorState(
-            error: syncSnapshot.error,
-            onRetry: _retrySync,
+            error:
+                syncSnapshot.error,
+            onRetry:
+                _retrySync,
           );
         }
 
         return _TeamsStreams(
-          repository: _repository,
+          repository:
+              _repository,
         );
       },
     );
@@ -77,6 +88,10 @@ class _TeamsScreenState
   }
 }
 
+// =============================================================
+// STREAMS PRINCIPALES
+// =============================================================
+
 class _TeamsStreams
     extends StatelessWidget {
   const _TeamsStreams({
@@ -86,7 +101,9 @@ class _TeamsStreams
   final TeamRepository repository;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return StreamBuilder<
         List<TeamAssignment>>(
       stream: repository
@@ -98,14 +115,16 @@ class _TeamsStreams
         if (assignmentSnapshot
                     .connectionState ==
                 ConnectionState.waiting &&
-            !assignmentSnapshot.hasData) {
+            !assignmentSnapshot
+                .hasData) {
           return const Center(
             child:
                 CircularProgressIndicator(),
           );
         }
 
-        if (assignmentSnapshot.hasError) {
+        if (assignmentSnapshot
+            .hasError) {
           return _TeamsError(
             message:
                 'No se pudieron cargar tus asignaciones.\n'
@@ -115,12 +134,15 @@ class _TeamsStreams
 
         final assignments =
             assignmentSnapshot.data ??
-                const <TeamAssignment>[];
+                const <
+                    TeamAssignment>[];
 
         final managerAssignments =
             assignments
                 .where(
-                  (assignment) =>
+                  (
+                    assignment,
+                  ) =>
                       assignment.role ==
                       TeamAssignmentRole
                           .teamManager,
@@ -130,7 +152,9 @@ class _TeamsStreams
         final playerAssignments =
             assignments
                 .where(
-                  (assignment) =>
+                  (
+                    assignment,
+                  ) =>
                       assignment.role ==
                       TeamAssignmentRole
                           .player,
@@ -138,7 +162,8 @@ class _TeamsStreams
                 .toList();
 
         return StreamBuilder<
-            List<TeamManagerInvitation>>(
+            List<
+                TeamManagerInvitation>>(
           stream: repository
               .watchPendingManagerInvitationsForCurrentUser(),
           builder: (
@@ -147,8 +172,10 @@ class _TeamsStreams
           ) {
             if (invitationSnapshot
                         .connectionState ==
-                    ConnectionState.waiting &&
-                !invitationSnapshot.hasData) {
+                    ConnectionState
+                        .waiting &&
+                !invitationSnapshot
+                    .hasData) {
               return const Center(
                 child:
                     CircularProgressIndicator(),
@@ -165,7 +192,8 @@ class _TeamsStreams
             }
 
             final invitations =
-                invitationSnapshot.data ??
+                invitationSnapshot
+                        .data ??
                     const <
                         TeamManagerInvitation>[];
 
@@ -174,8 +202,10 @@ class _TeamsStreams
                   managerAssignments,
               playerAssignments:
                   playerAssignments,
-              invitations: invitations,
-              repository: repository,
+              invitations:
+                  invitations,
+              repository:
+                  repository,
             );
           },
         );
@@ -183,6 +213,10 @@ class _TeamsStreams
     );
   }
 }
+
+// =============================================================
+// CONTENIDO PRINCIPAL
+// =============================================================
 
 class _TeamsContent
     extends StatelessWidget {
@@ -205,7 +239,9 @@ class _TeamsContent
   final TeamRepository repository;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     final theme =
         Theme.of(context);
 
@@ -239,7 +275,7 @@ class _TeamsContent
         ),
 
         Text(
-          'Consulta tus equipos, invitaciones y accesos.',
+          'Consulta tus equipos, próximos partidos, invitaciones y accesos.',
           style:
               theme.textTheme.bodyMedium,
         ),
@@ -257,18 +293,20 @@ class _TeamsContent
               const EdgeInsets.all(
             18,
           ),
-          decoration: BoxDecoration(
+          decoration:
+              BoxDecoration(
             gradient:
                 LinearGradient(
               begin:
                   Alignment.topLeft,
-              end: Alignment
-                  .bottomRight,
+              end:
+                  Alignment.bottomRight,
               colors: [
                 colors.primary,
                 colors.primary
                     .withValues(
-                  alpha: 0.78,
+                  alpha:
+                      0.78,
                 ),
               ],
             ),
@@ -280,13 +318,16 @@ class _TeamsContent
           child: Row(
             children: [
               Container(
-                width: 54,
-                height: 54,
+                width:
+                    54,
+                height:
+                    54,
                 decoration:
                     BoxDecoration(
                   color: Colors.white
                       .withValues(
-                    alpha: 0.16,
+                    alpha:
+                        0.16,
                   ),
                   borderRadius:
                       BorderRadius
@@ -300,12 +341,14 @@ class _TeamsContent
                       .person_add_solid,
                   color:
                       Colors.white,
-                  size: 26,
+                  size:
+                      26,
                 ),
               ),
 
               const SizedBox(
-                width: 14,
+                width:
+                    14,
               ),
 
               Expanded(
@@ -329,7 +372,8 @@ class _TeamsContent
                     ),
 
                     const SizedBox(
-                      height: 4,
+                      height:
+                          4,
                     ),
 
                     Text(
@@ -351,16 +395,19 @@ class _TeamsContent
               ),
 
               const SizedBox(
-                width: 8,
+                width:
+                    8,
               ),
 
               Material(
                 color:
                     Colors.transparent,
-                child: InkWell(
+                child:
+                    InkWell(
                   customBorder:
                       const CircleBorder(),
-                  onTap: () async {
+                  onTap:
+                      () async {
                     final joined =
                         await Navigator
                             .of(
@@ -391,18 +438,23 @@ class _TeamsContent
                       );
                     }
                   },
-                  child: Container(
-                    width: 42,
-                    height: 42,
+                  child:
+                      Container(
+                    width:
+                        42,
+                    height:
+                        42,
                     decoration:
                         BoxDecoration(
                       color: Colors
                           .white
                           .withValues(
-                        alpha: 0.16,
+                        alpha:
+                            0.16,
                       ),
                       shape:
-                          BoxShape.circle,
+                          BoxShape
+                              .circle,
                     ),
                     child:
                         const Icon(
@@ -419,7 +471,8 @@ class _TeamsContent
         ),
 
         const SizedBox(
-          height: 26,
+          height:
+              26,
         ),
 
         // =====================================================
@@ -435,21 +488,25 @@ class _TeamsContent
                 .titleLarge
                 ?.copyWith(
                   fontWeight:
-                      FontWeight.w900,
+                      FontWeight
+                          .w900,
                 ),
           ),
 
           const SizedBox(
-            height: 12,
+            height:
+                12,
           ),
 
           ...playerAssignments.map(
-            (assignment) =>
+            (
+              assignment,
+            ) =>
                 Padding(
               padding:
-                  const EdgeInsets
-                      .only(
-                bottom: 12,
+                  const EdgeInsets.only(
+                bottom:
+                    12,
               ),
               child:
                   _PlayerTeamCard(
@@ -462,7 +519,8 @@ class _TeamsContent
           ),
 
           const SizedBox(
-            height: 16,
+            height:
+                16,
           ),
         ],
 
@@ -479,21 +537,25 @@ class _TeamsContent
                 .titleLarge
                 ?.copyWith(
                   fontWeight:
-                      FontWeight.w900,
+                      FontWeight
+                          .w900,
                 ),
           ),
 
           const SizedBox(
-            height: 12,
+            height:
+                12,
           ),
 
           ...managerAssignments.map(
-            (assignment) =>
+            (
+              assignment,
+            ) =>
                 Padding(
               padding:
-                  const EdgeInsets
-                      .only(
-                bottom: 12,
+                  const EdgeInsets.only(
+                bottom:
+                    12,
               ),
               child:
                   _ManagedTeamCard(
@@ -506,12 +568,13 @@ class _TeamsContent
           ),
 
           const SizedBox(
-            height: 20,
+            height:
+                20,
           ),
         ],
 
         // =====================================================
-        // INVITACIONES A ENCARGADO
+        // INVITACIONES
         // =====================================================
 
         Text(
@@ -526,26 +589,31 @@ class _TeamsContent
         ),
 
         const SizedBox(
-          height: 12,
+          height:
+              12,
         ),
 
         if (invitations.isEmpty)
           Card(
-            elevation: 0,
-            child: Padding(
+            elevation:
+                0,
+            child:
+                Padding(
               padding:
-                  const EdgeInsets
-                      .all(
+                  const EdgeInsets.all(
                 20,
               ),
-              child: Row(
+              child:
+                  Row(
                 crossAxisAlignment:
                     CrossAxisAlignment
                         .start,
                 children: [
                   Container(
-                    width: 48,
-                    height: 48,
+                    width:
+                        48,
+                    height:
+                        48,
                     decoration:
                         BoxDecoration(
                       color: colors
@@ -556,7 +624,8 @@ class _TeamsContent
                         14,
                       ),
                     ),
-                    child: Icon(
+                    child:
+                        Icon(
                       CupertinoIcons
                           .envelope,
                       color:
@@ -565,11 +634,13 @@ class _TeamsContent
                   ),
 
                   const SizedBox(
-                    width: 14,
+                    width:
+                        14,
                   ),
 
                   const Expanded(
-                    child: Column(
+                    child:
+                        Column(
                       crossAxisAlignment:
                           CrossAxisAlignment
                               .start,
@@ -585,7 +656,8 @@ class _TeamsContent
                         ),
 
                         SizedBox(
-                          height: 5,
+                          height:
+                              5,
                         ),
 
                         Text(
@@ -600,12 +672,14 @@ class _TeamsContent
           )
         else
           ...invitations.map(
-            (invitation) =>
+            (
+              invitation,
+            ) =>
                 Padding(
               padding:
-                  const EdgeInsets
-                      .only(
-                bottom: 12,
+                  const EdgeInsets.only(
+                bottom:
+                    12,
               ),
               child:
                   _ManagerInvitationCard(
@@ -618,7 +692,8 @@ class _TeamsContent
           ),
 
         const SizedBox(
-          height: 24,
+          height:
+              24,
         ),
 
         if (managerAssignments
@@ -640,7 +715,8 @@ class _TeamsContent
                 18,
               ),
             ),
-            child: Row(
+            child:
+                Row(
               crossAxisAlignment:
                   CrossAxisAlignment
                       .start,
@@ -653,11 +729,13 @@ class _TeamsContent
                 ),
 
                 const SizedBox(
-                  width: 12,
+                  width:
+                      12,
                 ),
 
                 const Expanded(
-                  child: Text(
+                  child:
+                      Text(
                     'Todavía no perteneces a ningún equipo. '
                     'Puedes ingresar mediante un código de invitación.',
                   ),
@@ -681,11 +759,16 @@ class _PlayerTeamCard
     required this.repository,
   });
 
-  final TeamAssignment assignment;
-  final TeamRepository repository;
+  final TeamAssignment
+      assignment;
+
+  final TeamRepository
+      repository;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     final theme =
         Theme.of(context);
 
@@ -693,8 +776,8 @@ class _PlayerTeamCard
         theme.colorScheme;
 
     return StreamBuilder<Team?>(
-      stream: repository
-          .watchTeamById(
+      stream:
+          repository.watchTeamById(
         assignment.teamId,
       ),
       builder: (
@@ -730,15 +813,18 @@ class _PlayerTeamCard
         }
 
         return Card(
-          elevation: 0,
+          elevation:
+              0,
           clipBehavior:
               Clip.antiAlias,
-          child: Padding(
+          child:
+              Padding(
             padding:
                 const EdgeInsets.all(
               18,
             ),
-            child: Column(
+            child:
+                Column(
               crossAxisAlignment:
                   CrossAxisAlignment
                       .start,
@@ -746,8 +832,10 @@ class _PlayerTeamCard
                 Row(
                   children: [
                     Container(
-                      width: 54,
-                      height: 54,
+                      width:
+                          54,
+                      height:
+                          54,
                       decoration:
                           BoxDecoration(
                         color: colors
@@ -772,8 +860,8 @@ class _PlayerTeamCard
                               child:
                                   Image.network(
                                 team.logoUrl,
-                                fit: BoxFit
-                                    .cover,
+                                fit:
+                                    BoxFit.cover,
                                 errorBuilder:
                                     (
                                   context,
@@ -783,8 +871,8 @@ class _PlayerTeamCard
                                   return Icon(
                                     CupertinoIcons
                                         .shield_fill,
-                                    color: colors
-                                        .primary,
+                                    color:
+                                        colors.primary,
                                   );
                                 },
                               ),
@@ -792,17 +880,19 @@ class _PlayerTeamCard
                           : Icon(
                               CupertinoIcons
                                   .shield_fill,
-                              color: colors
-                                  .primary,
+                              color:
+                                  colors.primary,
                             ),
                     ),
 
                     const SizedBox(
-                      width: 14,
+                      width:
+                          14,
                     ),
 
                     Expanded(
-                      child: Column(
+                      child:
+                          Column(
                         crossAxisAlignment:
                             CrossAxisAlignment
                                 .start,
@@ -820,7 +910,8 @@ class _PlayerTeamCard
                           ),
 
                           const SizedBox(
-                            height: 3,
+                            height:
+                                3,
                           ),
 
                           Text(
@@ -832,15 +923,16 @@ class _PlayerTeamCard
                       ),
                     ),
 
-                    Chip(
+                    const Chip(
                       avatar:
-                          const Icon(
+                          Icon(
                         CupertinoIcons
                             .sportscourt_fill,
-                        size: 16,
+                        size:
+                            16,
                       ),
                       label:
-                          const Text(
+                          Text(
                         'Jugador',
                       ),
                     ),
@@ -849,8 +941,10 @@ class _PlayerTeamCard
 
                 if (hasError) ...[
                   const SizedBox(
-                    height: 14,
+                    height:
+                        14,
                   ),
+
                   Container(
                     width:
                         double.infinity,
@@ -869,7 +963,8 @@ class _PlayerTeamCard
                         12,
                       ),
                     ),
-                    child: Text(
+                    child:
+                        Text(
                       'Perteneces al equipo, pero no se pudo cargar su información.',
                       style:
                           TextStyle(
@@ -879,6 +974,18 @@ class _PlayerTeamCard
                     ),
                   ),
                 ],
+
+                // =================================================
+                // PARTIDO DEL EQUIPO DEL JUGADOR
+                // =================================================
+
+                if (team != null)
+                  TeamMatchPanel(
+                    teamId:
+                        team.id,
+                    tournamentId:
+                        team.tournamentId,
+                  ),
               ],
             ),
           ),
@@ -899,18 +1006,23 @@ class _ManagedTeamCard
     required this.repository,
   });
 
-  final TeamAssignment assignment;
-  final TeamRepository repository;
+  final TeamAssignment
+      assignment;
+
+  final TeamRepository
+      repository;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     final colors =
         Theme.of(context)
             .colorScheme;
 
     return StreamBuilder<Team?>(
-      stream: repository
-          .watchTeamById(
+      stream:
+          repository.watchTeamById(
         assignment.teamId,
       ),
       builder: (
@@ -946,13 +1058,16 @@ class _ManagedTeamCard
         }
 
         return Card(
-          elevation: 0,
-          child: Padding(
+          elevation:
+              0,
+          child:
+              Padding(
             padding:
                 const EdgeInsets.all(
               18,
             ),
-            child: Column(
+            child:
+                Column(
               crossAxisAlignment:
                   CrossAxisAlignment
                       .start,
@@ -960,8 +1075,10 @@ class _ManagedTeamCard
                 Row(
                   children: [
                     Container(
-                      width: 50,
-                      height: 50,
+                      width:
+                          50,
+                      height:
+                          50,
                       decoration:
                           BoxDecoration(
                         color: colors
@@ -986,8 +1103,8 @@ class _ManagedTeamCard
                               child:
                                   Image.network(
                                 team.logoUrl,
-                                fit: BoxFit
-                                    .cover,
+                                fit:
+                                    BoxFit.cover,
                                 errorBuilder:
                                     (
                                   context,
@@ -997,8 +1114,8 @@ class _ManagedTeamCard
                                   return Icon(
                                     CupertinoIcons
                                         .shield_fill,
-                                    color: colors
-                                        .primary,
+                                    color:
+                                        colors.primary,
                                   );
                                 },
                               ),
@@ -1006,17 +1123,19 @@ class _ManagedTeamCard
                           : Icon(
                               CupertinoIcons
                                   .shield_fill,
-                              color: colors
-                                  .primary,
+                              color:
+                                  colors.primary,
                             ),
                     ),
 
                     const SizedBox(
-                      width: 14,
+                      width:
+                          14,
                     ),
 
                     Expanded(
-                      child: Column(
+                      child:
+                          Column(
                         crossAxisAlignment:
                             CrossAxisAlignment
                                 .start,
@@ -1036,7 +1155,8 @@ class _ManagedTeamCard
                           ),
 
                           const SizedBox(
-                            height: 3,
+                            height:
+                                3,
                           ),
 
                           Text(
@@ -1049,16 +1169,19 @@ class _ManagedTeamCard
                     ),
 
                     Chip(
-                      label: Text(
+                      label:
+                          Text(
                         assignment
-                            .role.label,
+                            .role
+                            .label,
                       ),
                     ),
                   ],
                 ),
 
                 const SizedBox(
-                  height: 18,
+                  height:
+                      18,
                 ),
 
                 if (hasError) ...[
@@ -1080,7 +1203,8 @@ class _ManagedTeamCard
                         12,
                       ),
                     ),
-                    child: Text(
+                    child:
+                        Text(
                       'Tu asignación está activa, pero todavía no se pudo cargar la información del equipo.',
                       style:
                           TextStyle(
@@ -1089,17 +1213,39 @@ class _ManagedTeamCard
                       ),
                     ),
                   ),
+
                   const SizedBox(
-                    height: 16,
+                    height:
+                        16,
+                  ),
+                ],
+
+                // =================================================
+                // PARTIDO DEL EQUIPO QUE ADMINISTRA
+                // =================================================
+
+                if (team != null) ...[
+                  TeamMatchPanel(
+                    teamId:
+                        team.id,
+                    tournamentId:
+                        team.tournamentId,
+                  ),
+
+                  const SizedBox(
+                    height:
+                        16,
                   ),
                 ],
 
                 const Text(
-                  'Como encargado activo puedes administrar la plantilla, invitaciones, escudo y uniforme de este equipo.',
+                  'Como encargado activo puedes administrar la plantilla, '
+                  'invitaciones, escudo y uniforme de este equipo.',
                 ),
 
                 const SizedBox(
-                  height: 16,
+                  height:
+                      16,
                 ),
 
                 SizedBox(
@@ -1162,7 +1308,8 @@ class _ManagerInvitationCard
   final TeamManagerInvitation
       invitation;
 
-  final TeamRepository repository;
+  final TeamRepository
+      repository;
 
   @override
   State<_ManagerInvitationCard>
@@ -1173,11 +1320,13 @@ class _ManagerInvitationCard
 class _ManagerInvitationCardState
     extends State<
         _ManagerInvitationCard> {
-  bool _processing = false;
+  bool _processing =
+      false;
 
   Future<void> _accept() async {
     setState(() {
-      _processing = true;
+      _processing =
+          true;
     });
 
     try {
@@ -1190,10 +1339,12 @@ class _ManagerInvitationCardState
         return;
       }
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(
         const SnackBar(
-          content: Text(
+          content:
+              Text(
             'Invitación aceptada. Ahora eres encargado de este equipo.',
           ),
         ),
@@ -1203,10 +1354,12 @@ class _ManagerInvitationCardState
         return;
       }
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(
         SnackBar(
-          content: Text(
+          content:
+              Text(
             'No se pudo aceptar la invitación: $error',
           ),
         ),
@@ -1214,7 +1367,8 @@ class _ManagerInvitationCardState
     } finally {
       if (mounted) {
         setState(() {
-          _processing = false;
+          _processing =
+              false;
         });
       }
     }
@@ -1222,7 +1376,8 @@ class _ManagerInvitationCardState
 
   Future<void> _reject() async {
     setState(() {
-      _processing = true;
+      _processing =
+          true;
     });
 
     try {
@@ -1235,10 +1390,12 @@ class _ManagerInvitationCardState
         return;
       }
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(
         const SnackBar(
-          content: Text(
+          content:
+              Text(
             'Invitación rechazada.',
           ),
         ),
@@ -1248,10 +1405,12 @@ class _ManagerInvitationCardState
         return;
       }
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(
         SnackBar(
-          content: Text(
+          content:
+              Text(
             'No se pudo rechazar la invitación: $error',
           ),
         ),
@@ -1259,7 +1418,8 @@ class _ManagerInvitationCardState
     } finally {
       if (mounted) {
         setState(() {
-          _processing = false;
+          _processing =
+              false;
         });
       }
     }
@@ -1274,13 +1434,16 @@ class _ManagerInvitationCardState
             .colorScheme;
 
     return Card(
-      elevation: 0,
-      child: Padding(
+      elevation:
+          0,
+      child:
+          Padding(
         padding:
             const EdgeInsets.all(
           18,
         ),
-        child: Column(
+        child:
+            Column(
           crossAxisAlignment:
               CrossAxisAlignment
                   .start,
@@ -1288,8 +1451,10 @@ class _ManagerInvitationCardState
             Row(
               children: [
                 Container(
-                  width: 48,
-                  height: 48,
+                  width:
+                      48,
+                  height:
+                      48,
                   decoration:
                       BoxDecoration(
                     color: colors
@@ -1300,7 +1465,8 @@ class _ManagerInvitationCardState
                       14,
                     ),
                   ),
-                  child: Icon(
+                  child:
+                      Icon(
                     CupertinoIcons
                         .shield_fill,
                     color:
@@ -1309,11 +1475,13 @@ class _ManagerInvitationCardState
                 ),
 
                 const SizedBox(
-                  width: 14,
+                  width:
+                      14,
                 ),
 
                 Expanded(
-                  child: Column(
+                  child:
+                      Column(
                     crossAxisAlignment:
                         CrossAxisAlignment
                             .start,
@@ -1327,20 +1495,22 @@ class _ManagerInvitationCardState
                                 .invitation
                                 .teamName
                             : 'Equipo',
-                        style: Theme.of(
+                        style:
+                            Theme.of(
                           context,
                         )
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(
-                              fontWeight:
-                                  FontWeight
-                                      .w900,
-                            ),
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  fontWeight:
+                                      FontWeight
+                                          .w900,
+                                ),
                       ),
 
                       const SizedBox(
-                        height: 3,
+                        height:
+                            3,
                       ),
 
                       const Text(
@@ -1353,16 +1523,19 @@ class _ManagerInvitationCardState
             ),
 
             const SizedBox(
-              height: 16,
+              height:
+                  16,
             ),
 
             const Text(
-              'Un administrador de liga quiere asignarte como encargado de este equipo. '
-              'Si aceptas, obtendrás permisos temporales para administrarlo.',
+              'Un administrador de liga quiere asignarte como encargado '
+              'de este equipo. Si aceptas, obtendrás permisos temporales '
+              'para administrarlo.',
             ),
 
             const SizedBox(
-              height: 18,
+              height:
+                  18,
             ),
 
             Row(
@@ -1382,7 +1555,8 @@ class _ManagerInvitationCardState
                 ),
 
                 const SizedBox(
-                  width: 10,
+                  width:
+                      10,
                 ),
 
                 Expanded(
@@ -1392,7 +1566,8 @@ class _ManagerInvitationCardState
                         _processing
                             ? null
                             : _accept,
-                    child: Text(
+                    child:
+                        Text(
                       _processing
                           ? 'Procesando...'
                           : 'Aceptar',
@@ -1420,10 +1595,14 @@ class _SyncErrorState
   });
 
   final Object? error;
-  final VoidCallback onRetry;
+
+  final VoidCallback
+      onRetry;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     final colors =
         Theme.of(context)
             .colorScheme;
@@ -1436,7 +1615,9 @@ class _SyncErrorState
       children: [
         Text(
           'Equipos',
-          style: Theme.of(context)
+          style: Theme.of(
+            context,
+          )
               .textTheme
               .headlineSmall
               ?.copyWith(
@@ -1446,17 +1627,21 @@ class _SyncErrorState
         ),
 
         const SizedBox(
-          height: 20,
+          height:
+              20,
         ),
 
         Card(
-          elevation: 0,
-          child: Padding(
+          elevation:
+              0,
+          child:
+              Padding(
             padding:
                 const EdgeInsets.all(
               20,
             ),
-            child: Column(
+            child:
+                Column(
               crossAxisAlignment:
                   CrossAxisAlignment
                       .start,
@@ -1466,11 +1651,13 @@ class _SyncErrorState
                       .exclamationmark_triangle,
                   color:
                       colors.error,
-                  size: 34,
+                  size:
+                      34,
                 ),
 
                 const SizedBox(
-                  height: 12,
+                  height:
+                      12,
                 ),
 
                 Text(
@@ -1488,7 +1675,8 @@ class _SyncErrorState
                 ),
 
                 const SizedBox(
-                  height: 8,
+                  height:
+                      8,
                 ),
 
                 const Text(
@@ -1496,7 +1684,8 @@ class _SyncErrorState
                 ),
 
                 const SizedBox(
-                  height: 8,
+                  height:
+                      8,
                 ),
 
                 Text(
@@ -1509,7 +1698,8 @@ class _SyncErrorState
                 ),
 
                 const SizedBox(
-                  height: 16,
+                  height:
+                      16,
                 ),
 
                 FilledButton.icon(
@@ -1543,7 +1733,9 @@ class _TeamsEmptyState
   const _TeamsEmptyState();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return ListView(
       padding:
           const EdgeInsets.all(
@@ -1552,7 +1744,9 @@ class _TeamsEmptyState
       children: [
         Text(
           'Equipos',
-          style: Theme.of(context)
+          style: Theme.of(
+            context,
+          )
               .textTheme
               .headlineSmall
               ?.copyWith(
@@ -1562,16 +1756,19 @@ class _TeamsEmptyState
         ),
 
         const SizedBox(
-          height: 20,
+          height:
+              20,
         ),
 
         const Card(
-          child: Padding(
+          child:
+              Padding(
             padding:
                 EdgeInsets.all(
               20,
             ),
-            child: Text(
+            child:
+                Text(
               'Firebase no está disponible en este entorno.',
             ),
           ),
@@ -1594,7 +1791,9 @@ class _TeamsError
   final String message;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return ListView(
       padding:
           const EdgeInsets.all(
@@ -1603,7 +1802,9 @@ class _TeamsError
       children: [
         Text(
           'Equipos',
-          style: Theme.of(context)
+          style: Theme.of(
+            context,
+          )
               .textTheme
               .headlineSmall
               ?.copyWith(
@@ -1613,16 +1814,19 @@ class _TeamsError
         ),
 
         const SizedBox(
-          height: 20,
+          height:
+              20,
         ),
 
         Card(
-          child: Padding(
+          child:
+              Padding(
             padding:
                 const EdgeInsets.all(
               20,
             ),
-            child: Row(
+            child:
+                Row(
               crossAxisAlignment:
                   CrossAxisAlignment
                       .start,
@@ -1633,11 +1837,13 @@ class _TeamsError
                 ),
 
                 const SizedBox(
-                  width: 12,
+                  width:
+                      12,
                 ),
 
                 Expanded(
-                  child: Text(
+                  child:
+                      Text(
                     message,
                   ),
                 ),

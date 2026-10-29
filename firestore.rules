@@ -1252,10 +1252,37 @@ service cloud.firestore {
       // verificar que el usuario administra esa liga.
       // ----------------------------------------------------------
 
-      // Scheduled venue matches are visible to every signed-in player.
-      allow read: if isSignedIn() && (
-        (resource.data.status == 'scheduled' && resource.data.courtId is string)
-        || isLeagueAdmin(resource.data.leagueId));
+      // ==========================================================
+      // LECTURA PÚBLICA DEL CALENDARIO DEPORTIVO
+      // ==========================================================
+      //
+      // Cualquier usuario autenticado de CanchaYA puede consultar
+     // los partidos del torneo.
+     //
+     // Esto incluye:
+     //
+      // scheduled  -> programado
+     // postponed  -> pospuesto
+     // completed  -> finalizado
+    //
+    // La lectura NO da permisos para modificar partidos.
+   // Crear, editar, programar canchas y publicar resultados
+   // siguen siendo operaciones protegidas para administradores.
+   //
+   // Esto permite mostrar:
+   //
+   // - todos los enfrentamientos;
+   // - partidos pendientes de cancha;
+   // - fecha y horario;
+// - cancha asignada;
+// - partidos pospuestos;
+// - resultados;
+// - calendario por día;
+// - próximos partidos de cada equipo.
+//
+// ==========================================================
+
+allow read: if isSignedIn();
 
       // ----------------------------------------------------------
       // CREAR PARTIDO
@@ -1370,13 +1397,28 @@ service cloud.firestore {
           == request.time;
 
       // ----------------------------------------------------------
-      // ACTUALIZAR (los resultados se implementarán después)
+      // PROGRAMAR / REPROGRAMAR CANCHA Y HORARIO
+      // ----------------------------------------------------------
+      //
+      // Solo administrador de liga.
+      //
+      // Permite:
+      //   scheduled -> scheduled  (asignar o cambiar cancha/horario)
+      //   postponed -> scheduled  (volver a programar)
+      //
+      // Solo pueden cambiar:
+      //   courtId, courtName, startsAt, bookingId, status, updatedAt
+      //
+      // Se conservan validMatchVenue(), la liberación de
+      // teamBookings anteriores y la baja de la reserva anterior
+      // en courtBookings.
       // ----------------------------------------------------------
 
       allow update: if isSignedIn() && isLeagueAdmin(resource.data.leagueId)
-        && resource.data.status == 'scheduled'
+        && resource.data.status in ['scheduled', 'postponed']
+        && request.resource.data.status == 'scheduled'
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['courtId', 'courtName', 'startsAt', 'bookingId', 'updatedAt'])
+          .hasOnly(['courtId', 'courtName', 'startsAt', 'bookingId', 'status', 'updatedAt'])
         && validMatchVenue(request.resource.data, matchId)
         && (!('startsAt' in resource.data)
           || resource.data.startsAt == request.resource.data.startsAt
@@ -1386,14 +1428,72 @@ service cloud.firestore {
           || !existsAfter(/databases/$(database)/documents/courtBookings/$(resource.data.bookingId)));
 
       // ----------------------------------------------------------
+      // POSPONER PARTIDO
+      // ----------------------------------------------------------
+      //
+      // Solo administrador de liga.
+      //
+      //   scheduled -> postponed
+      //
+      // Se eliminan courtId, courtName, startsAt y bookingId.
+      // Los marcadores no cambian. Deben quedar liberadas las
+      // reservas anteriores de teamBookings y courtBookings.
+      // ----------------------------------------------------------
+
+      allow update: if isSignedIn() && isLeagueAdmin(resource.data.leagueId)
+        && resource.data.status == 'scheduled'
+        && request.resource.data.status == 'postponed'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'courtId', 'courtName', 'startsAt', 'bookingId', 'updatedAt'])
+        && !('courtId' in request.resource.data)
+        && !('courtName' in request.resource.data)
+        && !('startsAt' in request.resource.data)
+        && !('bookingId' in request.resource.data)
+        && request.resource.data.updatedAt == request.time
+        && oldTeamSlotsReleased(resource.data)
+        && (!('bookingId' in resource.data)
+          || !existsAfter(/databases/$(database)/documents/courtBookings/$(resource.data.bookingId)));
+
+      // ----------------------------------------------------------
+      // PUBLICAR RESULTADO
+      // ----------------------------------------------------------
+      //
+      // Solo administrador de liga.
+      //
+      //   scheduled -> completed
+      //
+      // Solo pueden cambiar: status, homeScore, awayScore y
+      // updatedAt. Cancha, horario y reserva se conservan como
+      // historial del partido disputado.
+      // ----------------------------------------------------------
+
+      allow update: if isSignedIn() && isLeagueAdmin(resource.data.leagueId)
+        && resource.data.status == 'scheduled'
+        && resource.data.homeScore == null
+        && resource.data.awayScore == null
+        && request.resource.data.status == 'completed'
+        && request.resource.data.homeScore is int
+        && request.resource.data.homeScore >= 0
+        && request.resource.data.awayScore is int
+        && request.resource.data.awayScore >= 0
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'homeScore', 'awayScore', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time;
+
+      // ----------------------------------------------------------
       // BORRAR (solo para regenerar calendario sin resultados)
+      // ----------------------------------------------------------
+      //
+      // Solo administrador de liga y solo partidos scheduled o
+      // postponed sin marcador. Los partidos completed forman
+      // parte del historial y no se pueden borrar.
       // ----------------------------------------------------------
 
       allow delete: if isSignedIn()
         && isLeagueAdmin(
           resource.data.leagueId
         )
-        && resource.data.status == 'scheduled'
+        && resource.data.status in ['scheduled', 'postponed']
         && resource.data.homeScore == null
         && resource.data.awayScore == null
         && oldTeamSlotsReleased(resource.data)
