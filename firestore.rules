@@ -648,7 +648,12 @@ service cloud.firestore {
         && isTeamManagerFromTeamDocument(teamId)
         && validLineup(request.resource.data, teamId);
 
-      allow delete: if false;
+      // Solo junto con la eliminación del equipo.
+      allow delete: if isSignedIn()
+        && isLeagueAdmin(resource.data.leagueId)
+        && !existsAfter(
+          /databases/$(database)/documents/teams/$(teamId)
+        );
     }
 
     // ============================================================
@@ -958,7 +963,25 @@ service cloud.firestore {
             'updatedAt'
           ]);
 
-      allow delete: if false;
+      // ----------------------------------------------------------
+      // ELIMINAR EQUIPO
+      // ----------------------------------------------------------
+      //
+      // Solo el administrador de la liga. En el MISMO batch se deben
+      // borrar su ficha pública (publicTeams) y su alineación
+      // (teamLineups), y revocar las asignaciones de encargado y
+      // jugadores (teamAssignments -> revoked). La app verifica antes
+      // que el equipo no tenga partidos en un calendario.
+      // ----------------------------------------------------------
+
+      allow delete: if isSignedIn()
+        && isLeagueAdmin(resource.data.leagueId)
+        && !existsAfter(
+          /databases/$(database)/documents/publicTeams/$(teamId)
+        )
+        && !existsAfter(
+          /databases/$(database)/documents/teamLineups/$(teamId)
+        );
     }
 
     // ============================================================
@@ -1007,7 +1030,12 @@ service cloud.firestore {
           teamId
         );
 
-      allow delete: if false;
+      // Solo junto con la eliminación del equipo.
+      allow delete: if isSignedIn()
+        && isLeagueAdmin(resource.data.leagueId)
+        && !existsAfter(
+          /databases/$(database)/documents/teams/$(teamId)
+        );
     }
 
     // ============================================================
@@ -1456,6 +1484,21 @@ service cloud.firestore {
           )
         );
 
+      // Al eliminar el equipo, el administrador de la liga cancela
+      // las invitaciones de encargado que seguían pendientes.
+      allow update: if isSignedIn()
+        && isLeagueAdmin(resource.data.leagueId)
+        && resource.data.status == 'pending'
+        && request.resource.data.status == 'revoked'
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly(['status', 'updatedAt'])
+        && !existsAfter(
+          /databases/$(database)/documents/teams/$(resource.data.teamId)
+        );
+
       allow delete: if false;
     }
 
@@ -1630,7 +1673,30 @@ service cloud.firestore {
         ).data.usedByUserId
           == request.auth.uid;
 
-      allow update, delete: if false;
+      // ----------------------------------------------------------
+      // REVOCAR ASIGNACIÓN AL ELIMINAR EL EQUIPO
+      // ----------------------------------------------------------
+      //
+      // Solo el administrador de la liga y solo si el equipo deja
+      // de existir en el mismo batch. El encargado y los jugadores
+      // pierden el acceso; la asignación queda como historial.
+      // ----------------------------------------------------------
+
+      allow update: if isSignedIn()
+        && isLeagueAdmin(resource.data.leagueId)
+        && resource.data.status in ['active', 'pending']
+        && request.resource.data.status == 'revoked'
+        && request.resource.data.revokedAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly(['status', 'revokedAt', 'updatedAt'])
+        && !existsAfter(
+          /databases/$(database)/documents/teams/$(resource.data.teamId)
+        );
+
+      allow delete: if false;
     }
 
     // ============================================================

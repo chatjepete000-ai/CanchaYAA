@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../teams/data/team_deletion_repository.dart';
 import '../../teams/data/team_repository.dart';
 import '../../teams/domain/team_models.dart';
 import '../data/league_repository.dart';
@@ -453,8 +454,164 @@ class _TeamAdminDetailScreen extends StatelessWidget {
               );
             },
           ),
+          const SizedBox(height: 28),
+          _DeleteTeamButton(team: team),
         ],
       ),
+    );
+  }
+}
+
+// ================================================================
+// ELIMINAR EQUIPO
+// ================================================================
+//
+// Borra el equipo, su ficha pública y su alineación, y revoca al
+// encargado y a los jugadores. No se permite si ya tiene partidos.
+// ================================================================
+
+class _DeleteTeamButton extends StatefulWidget {
+  const _DeleteTeamButton({
+    required this.team,
+  });
+
+  final Team team;
+
+  @override
+  State<_DeleteTeamButton> createState() => _DeleteTeamButtonState();
+}
+
+class _DeleteTeamButtonState extends State<_DeleteTeamButton> {
+  final TeamDeletionRepository _repository = TeamDeletionRepository();
+
+  bool _deleting = false;
+
+  Future<void> _confirmAndDelete() async {
+    final team = widget.team;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          icon: Icon(
+            Icons.delete_forever_outlined,
+            color: Theme.of(dialogContext).colorScheme.error,
+          ),
+          title: const Text('Eliminar equipo'),
+          content: Text(
+            '¿Eliminar "${team.name}"?\n\n'
+            '• El encargado dejará de administrar el equipo.\n'
+            '• Los jugadores dejarán de pertenecer a él.\n'
+            '• Se borrarán su escudo, nombre corto y alineación.\n\n'
+            'Esta acción no se puede deshacer.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(dialogContext).colorScheme.error,
+                foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Eliminar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _deleting = true;
+    });
+
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    try {
+      final result = await _repository.deleteTeam(team);
+
+      final revokedText = result.revokedAssignments == 1
+          ? '1 integrante perdió el acceso'
+          : '${result.revokedAssignments} integrantes perdieron el acceso';
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            '"${team.name}" se eliminó. $revokedText.',
+          ),
+        ),
+      );
+
+      navigator.pop();
+    } on StateError catch (error) {
+      if (!mounted) return;
+      await _showError(error.message);
+    } on FirebaseException catch (error) {
+      if (!mounted) return;
+      await _showError(
+        error.code == 'permission-denied'
+            ? 'No tienes permiso para eliminar este equipo. Solo el '
+                'administrador de la liga puede hacerlo.'
+            : 'No se pudo eliminar el equipo. Revisa tu conexión e '
+                'inténtalo de nuevo.',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      await _showError(
+        'No se pudo eliminar el equipo. Revisa tu conexión e inténtalo '
+        'de nuevo.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _deleting = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showError(String message) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('No se eliminó el equipo'),
+        content: Text(message),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return OutlinedButton.icon(
+      onPressed: _deleting ? null : _confirmAndDelete,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: colors.error,
+        side: BorderSide(color: colors.error.withValues(alpha: 0.6)),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+      ),
+      icon: _deleting
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.delete_outline),
+      label: Text(_deleting ? 'Eliminando…' : 'Eliminar equipo'),
     );
   }
 }
