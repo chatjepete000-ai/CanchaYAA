@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../leagues/presentation/league_admin_screen.dart';
+import '../../notifications/presentation/notification_center_screen.dart';
+import '../../notifications/services/notification_service.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/domain/user_profile.dart';
 import '../../teams/presentation/teams_screen.dart';
@@ -24,6 +28,48 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _selectedIndex = 0;
+
+  StreamSubscription<Map<String, dynamic>>? _notificationTaps;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // F06: al tocar un aviso (recordatorio, cambio de horario o
+    // resultado) se abre la bandeja de notificaciones.
+    if (Firebase.apps.isNotEmpty) {
+      final service = NotificationService.instance;
+
+      _notificationTaps =
+          service.notificationTapStream.listen(_openFromNotification);
+
+      final initial = service.takeInitialNotificationData();
+
+      if (initial != null) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _openFromNotification(initial),
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _notificationTaps?.cancel();
+    super.dispose();
+  }
+
+  void _openFromNotification(Map<String, dynamic> data) {
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const NotificationCenterScreen(),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {

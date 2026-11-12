@@ -242,6 +242,53 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------
+    // AVISOS DE PARTIDOS (F06)
+    // ------------------------------------------------------------
+
+    function isTeamMember(teamId, userId) {
+      return teamExists(teamId)
+        && (
+          userId in teamData(teamId).playerUserIds
+          || userId in teamData(teamId).managerUserIds
+        );
+    }
+
+    function isMatchTeamMember(matchId, userId) {
+      let game = get(/databases/$(database)/documents/tournamentMatches/$(matchId)).data;
+      return exists(/databases/$(database)/documents/tournamentMatches/$(matchId))
+        && (isTeamMember(game.homeTeamId, userId)
+          || isTeamMember(game.awayTeamId, userId));
+    }
+
+    function validMatchNotificationShape(data) {
+      return data.keys().hasAll(['recipientUserId', 'title', 'body',
+          'type', 'isRead', 'readAt', 'createdAt', 'senderUserId',
+          'matchId', 'tournamentId', 'route', 'data'])
+        && data.keys().hasOnly(['recipientUserId', 'title', 'body',
+          'type', 'isRead', 'readAt', 'createdAt', 'senderUserId',
+          'teamId', 'matchId', 'tournamentId', 'invitationId', 'route',
+          'data'])
+        && data.recipientUserId is string
+        && data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 120
+        && data.body is string
+        && data.body.size() > 0
+        && data.body.size() <= 600
+        && data.isRead == false
+        && data.readAt == null
+        && data.createdAt == request.time
+        && data.matchId is string
+        && data.matchId.size() > 0
+        && data.route == 'notifications'
+        && data.data is map
+        && data.data.size() <= 16
+        && data.data.eventKey is string
+        && data.data.eventKey.size() > 0
+        && data.data.eventKey.size() <= 40;
+    }
+
+    // ------------------------------------------------------------
     // RESULTADOS (F08)
     // ------------------------------------------------------------
     //
@@ -1928,10 +1975,46 @@ allow read: if isSignedIn();
         && resource.data.recipientUserId
           == request.auth.uid;
 
-      // Las notificaciones se crearán únicamente desde un entorno
-      // confiable del servidor. El cliente Flutter no puede
-      // fabricar notificaciones arbitrarias.
-      allow create: if false;
+      // F06: el cliente solo puede crear avisos de partidos en dos
+      // casos controlados (no puede fabricar avisos arbitrarios):
+      //
+      // 1) El administrador de la liga avisa a jugadores y
+      //    encargados de los DOS equipos del partido que se
+      //    programó, reprogramó o cuyo resultado se publicó.
+      //
+      // 2) Un jugador o encargado registra en SU PROPIA bandeja un
+      //    recordatorio (24 h, 1 h o inicio) de un partido de su
+      //    equipo.
+      //
+      // El ID es determinista ({matchId}_{evento}_{uid}), así que
+      // un reintento no duplica el aviso: crear un documento que ya
+      // existe cuenta como update y se rechaza.
+      allow create: if isSignedIn()
+        && validMatchNotificationShape(request.resource.data)
+        && notificationId == request.resource.data.matchId + '_'
+          + request.resource.data.data.eventKey + '_'
+          + request.resource.data.recipientUserId
+        && isMatchTeamMember(
+          request.resource.data.matchId,
+          request.resource.data.recipientUserId
+        )
+        && (
+          (
+            request.resource.data.type in
+              ['match_created', 'match_updated', 'result_published']
+            && request.resource.data.senderUserId == request.auth.uid
+            && isLeagueAdmin(
+              get(/databases/$(database)/documents/tournamentMatches/$(request.resource.data.matchId)).data.leagueId
+            )
+          )
+          ||
+          (
+            request.resource.data.type == 'match_reminder'
+            && request.resource.data.recipientUserId == request.auth.uid
+            && request.resource.data.senderUserId == request.auth.uid
+            && request.resource.data.data.eventKey in ['r24', 'r1', 'r0']
+          )
+        );
 
       // El usuario destinatario únicamente puede cambiar una
       // notificación de no leída -> leída.

@@ -179,7 +179,10 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
           text: 'Alineación de ${widget.team.displayName}',
         ),
       );
-    } catch (_) {
+    } catch (error) {
+      // Detalle en la terminal de `flutter run` para diagnosticar.
+      debugPrint('Exportar alineación falló: $error');
+
       if (mounted) {
         _showMessage('No se pudo exportar la imagen.');
       }

@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../courts/presentation/courts_screen.dart';
+import '../../notifications/data/match_notification_publisher.dart';
 import '../data/match_result_repository.dart';
 import '../data/tournament_schedule_repository.dart';
 import '../domain/match_result.dart';
@@ -169,18 +170,31 @@ class _MatchResultScreenState
         );
       }
 
+      // F06: avisar a ambos equipos. Si falla, el resultado ya
+      // quedó guardado.
+      var notified = 0;
+      try {
+        notified = await MatchNotificationPublisher().notifyResult(
+          matchId: match.id,
+        );
+      } catch (_) {}
+
       if (!mounted) {
         return;
       }
 
       _reasonController.clear();
 
+      final saved = isCorrection
+          ? 'Resultado corregido.'
+          : 'Resultado publicado.';
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            isCorrection
-                ? 'Resultado corregido.'
-                : 'Resultado publicado.',
+            notified > 0
+                ? '$saved Se avisó a $notified integrantes.'
+                : saved,
           ),
         ),
       );

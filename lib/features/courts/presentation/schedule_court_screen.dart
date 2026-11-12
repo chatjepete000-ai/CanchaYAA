@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../notifications/data/match_notification_publisher.dart';
 import '../../tournaments/data/tournament_schedule_repository.dart';
 import '../data/court_repository.dart';
 import '../domain/court.dart';
@@ -29,12 +30,35 @@ class _ScheduleCourtScreenState extends State<ScheduleCourtScreen> {
       _error = null;
     });
     try {
+      final rescheduled = widget.match.startsAt != null;
       await _repository.scheduleMatch(
         widget.match,
         court,
         DateTime(_date.year, _date.month, _date.day, _hour),
       );
-      if (mounted) Navigator.pop(context);
+
+      // F06: avisar a jugadores y encargados de ambos equipos. Si
+      // falla, el partido ya quedó programado.
+      var notified = 0;
+      try {
+        notified = await MatchNotificationPublisher().notifyScheduled(
+          matchId: widget.match.id,
+          rescheduled: rescheduled,
+        );
+      } catch (_) {}
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              notified > 0
+                  ? 'Partido programado. Se avisó a $notified integrantes.'
+                  : 'Partido programado.',
+            ),
+          ),
+        );
+        Navigator.pop(context);
+      }
     } catch (error) {
       if (mounted) {
         setState(
