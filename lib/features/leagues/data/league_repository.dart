@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../tournaments/data/public_tournament_repository.dart';
 import '../domain/league_models.dart';
 
 class LeagueRepository {
@@ -18,6 +19,9 @@ class LeagueRepository {
 
   CollectionReference<Map<String, dynamic>> get _tournaments =>
       _firestore.collection('tournaments');
+
+  CollectionReference<Map<String, dynamic>> get _publicTournaments =>
+      _firestore.collection('publicTournaments');
 
   Stream<List<League>> watchManagedLeaguesForCurrentUser() {
     final user = _auth.currentUser;
@@ -148,14 +152,33 @@ class LeagueRepository {
       status: TournamentStatus.draft,
     );
 
-    await document.set(
-      {
-        ...tournament.toMap(),
-        'createdByUserId': user.uid,
-        'createdAt': FieldValue.serverTimestamp(),
+    final tournamentData = <String, dynamic>{
+      ...tournament.toMap(),
+      'createdByUserId': user.uid,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    // F05: el torneo y su ficha pública se crean juntos para que
+    // aparezca en la sección Torneos de todos los usuarios.
+    final batch = _firestore.batch();
+
+    batch.set(
+      document,
+      tournamentData,
+    );
+
+    batch.set(
+      _publicTournaments.doc(document.id),
+      <String, dynamic>{
+        ...PublicTournamentRepository.publicDataFrom(
+          tournament.toMap(),
+        ),
         'updatedAt': FieldValue.serverTimestamp(),
       },
     );
+
+    await batch.commit();
 
     return document.id;
   }
@@ -226,12 +249,31 @@ class LeagueRepository {
       );
     }
 
-    await tournamentRef.update(
+    // F05: el estado público se actualiza en el mismo batch.
+    final batch = _firestore.batch();
+
+    batch.update(
+      tournamentRef,
       {
         'status': status.value,
         'updatedAt': FieldValue.serverTimestamp(),
       },
     );
+
+    batch.set(
+      _publicTournaments.doc(tournamentId),
+      <String, dynamic>{
+        ...PublicTournamentRepository.publicDataFrom(
+          <String, dynamic>{
+            ...tournamentData,
+            'status': status.value,
+          },
+        ),
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+    );
+
+    await batch.commit();
   }
 
   Future<League?> getLeagueById(

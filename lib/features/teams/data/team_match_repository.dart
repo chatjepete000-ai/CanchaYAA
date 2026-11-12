@@ -15,9 +15,13 @@ class TeamMatchSummary {
     this.startsAt,
     this.homeScore,
     this.awayScore,
+    this.roundNumber = 0,
   });
 
   final String id;
+
+  /// Jornada del torneo (0 si el documento no la tiene).
+  final int roundNumber;
 
   final String tournamentId;
   final String leagueId;
@@ -148,6 +152,12 @@ class TeamMatchSummary {
 
     return TeamMatchSummary(
       id: document.id,
+
+      roundNumber:
+          _readNullableInt(
+                data['roundNumber'],
+              ) ??
+              0,
 
       tournamentId:
           _readString(
@@ -335,6 +345,49 @@ class TeamMatchRepository {
   Stream<List<TeamMatchSummary>>
       watchAllMatches() {
     return _matches
+        .snapshots()
+        .map(
+      (snapshot) {
+        final matches =
+            snapshot.docs
+                .map(
+                  TeamMatchSummary
+                      .fromFirestore,
+                )
+                .toList();
+
+        matches.sort(
+          _sortPublicSchedule,
+        );
+
+        return matches;
+      },
+    );
+  }
+
+  // ============================================================
+  // PARTIDOS DE UN TORNEO (sección Torneos)
+  // ============================================================
+
+  Stream<List<TeamMatchSummary>>
+      watchMatchesForTournament(
+    String tournamentId,
+  ) {
+    final cleanTournamentId =
+        tournamentId.trim();
+
+    if (cleanTournamentId.isEmpty) {
+      return Stream<
+          List<TeamMatchSummary>>.value(
+        const <TeamMatchSummary>[],
+      );
+    }
+
+    return _matches
+        .where(
+          'tournamentId',
+          isEqualTo: cleanTournamentId,
+        )
         .snapshots()
         .map(
       (snapshot) {

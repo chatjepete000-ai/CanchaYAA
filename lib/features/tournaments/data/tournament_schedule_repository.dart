@@ -18,6 +18,9 @@ class TournamentMatchRecord {
     this.courtId,
     this.courtName,
     this.startsAt,
+    this.homeScore,
+    this.awayScore,
+    this.resultVersion = 0,
   });
 
   final String id;
@@ -38,6 +41,19 @@ class TournamentMatchRecord {
   final String? courtId;
   final String? courtName;
   final DateTime? startsAt;
+
+  // F08 · Resultado (null mientras no se publique).
+  final int? homeScore;
+  final int? awayScore;
+  final int resultVersion;
+
+  bool get isCompleted => status == 'completed';
+
+  bool get hasResult =>
+      homeScore != null && awayScore != null;
+
+  bool get canRecordResult =>
+      status == 'scheduled' && startsAt != null;
 
   factory TournamentMatchRecord.fromMap(
     String id,
@@ -66,6 +82,10 @@ class TournamentMatchRecord {
           (data['awayTeamName'] as String?)?.trim() ?? '',
       status:
           (data['status'] as String?)?.trim() ?? 'scheduled',
+      homeScore: (data['homeScore'] as num?)?.toInt(),
+      awayScore: (data['awayScore'] as num?)?.toInt(),
+      resultVersion:
+          (data['resultVersion'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -356,6 +376,19 @@ class TournamentScheduleRepository {
                   cleanTournamentId,
             )
             .get();
+
+    // F08: los partidos con resultado forman parte del historial y
+    // firestore.rules no permite borrarlos.
+    final hasResults = existingSnapshot.docs.any(
+      (doc) => doc.data()['status'] == 'completed',
+    );
+
+    if (hasResults) {
+      throw StateError(
+        'No se puede regenerar el calendario porque ya hay '
+        'partidos con resultado.',
+      );
+    }
 
     final batch =
         _firestore.batch();

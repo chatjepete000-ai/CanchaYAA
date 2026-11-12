@@ -6,8 +6,10 @@ import 'package:flutter/material.dart';
 
 import '../../leagues/domain/league_models.dart';
 import '../../teams/domain/team_models.dart';
+import '../data/public_tournament_repository.dart';
 import '../data/tournament_schedule_repository.dart';
 import '../domain/round_robin_generator.dart';
+import 'match_result_screen.dart';
 
 class TournamentScheduleScreen extends StatefulWidget {
   const TournamentScheduleScreen({
@@ -33,6 +35,18 @@ class _TournamentScheduleScreenState
   bool _saving = false;
 
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // F05: los torneos creados antes de publicTournaments se
+    // publican la primera vez que el administrador los abre.
+    // Si falla (sin conexión), se reintenta la próxima vez.
+    PublicTournamentRepository()
+        .syncFromTournament(widget.tournament.id)
+        .catchError((Object _) {});
+  }
 
   Stream<List<Team>> _watchTournamentTeams() {
     return FirebaseFirestore.instance
@@ -1444,24 +1458,102 @@ class _SavedMatchTile extends StatelessWidget {
 
   final TournamentMatchRecord match;
 
+  void _openSchedule(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ScheduleCourtScreen(match: match)),
+    );
+  }
+
+  void _openResult(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => MatchResultScreen(match: match)),
+    );
+  }
+
+  // F08: un partido finalizado ya no se reprograma; solo se
+  // consulta o corrige su resultado. Un partido programado con
+  // horario puede reprogramarse o recibir su resultado.
+  Future<void> _showOptions(BuildContext context) async {
+    if (match.isCompleted) {
+      _openResult(context);
+      return;
+    }
+
+    if (!match.canRecordResult) {
+      _openSchedule(context);
+      return;
+    }
+
+    final option = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_calendar_outlined),
+              title: const Text('Cambiar cancha u horario'),
+              onTap: () => Navigator.pop(sheetContext, 'schedule'),
+            ),
+            ListTile(
+              leading: const Icon(CupertinoIcons.sportscourt),
+              title: const Text('Capturar resultado'),
+              onTap: () => Navigator.pop(sheetContext, 'result'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (!context.mounted) {
+      return;
+    }
+
+    if (option == 'schedule') {
+      _openSchedule(context);
+    } else if (option == 'result') {
+      _openResult(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final String subtitle;
+    final Widget trailing;
+
+    if (match.isCompleted && match.hasResult) {
+      subtitle = 'Finalizado · Toca para ver o corregir';
+      trailing = Text(
+        '${match.homeScore} - ${match.awayScore}',
+        style: const TextStyle(
+          fontWeight: FontWeight.w900,
+          fontSize: 18,
+        ),
+      );
+    } else if (match.status == 'postponed') {
+      subtitle = 'Pospuesto · Toca para reprogramar';
+      trailing = const Icon(Icons.edit_calendar_outlined);
+    } else if (match.startsAt == null) {
+      subtitle = 'Sin cancha ni horario · Toca para programar';
+      trailing = const Icon(Icons.edit_calendar_outlined);
+    } else {
+      subtitle =
+          '${match.courtName ?? "Cancha"}\n${formatCourtDate(match.startsAt!)}';
+      trailing = const Icon(Icons.more_horiz);
+    }
+
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       title: Text(
         '${match.homeTeamName} vs ${match.awayTeamName}',
         style: const TextStyle(fontWeight: FontWeight.w800),
       ),
-      subtitle: Text(
-        match.startsAt == null
-            ? 'Sin cancha ni horario · Toca para programar'
-            : '${match.courtName ?? "Cancha"}\n${formatCourtDate(match.startsAt!)}',
-      ),
-      trailing: const Icon(Icons.edit_calendar_outlined),
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => ScheduleCourtScreen(match: match)),
-      ),
+      subtitle: Text(subtitle),
+      trailing: trailing,
+      onTap: () => _showOptions(context),
     );
   }
 }

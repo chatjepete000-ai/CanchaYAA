@@ -14,9 +14,18 @@ class TeamCalendarScreen extends StatefulWidget {
   const TeamCalendarScreen({
     super.key,
     this.highlightedTeamIds = const <String>{},
+    this.tournamentId,
+    this.title = 'Calendario',
   });
 
   final Set<String> highlightedTeamIds;
+
+  /// Si se indica, solo se muestran los partidos de ese torneo
+  /// (sección Torneos). Si es null se conserva el comportamiento
+  /// anterior: todos los partidos.
+  final String? tournamentId;
+
+  final String title;
 
   @override
   State<TeamCalendarScreen> createState() =>
@@ -98,16 +107,19 @@ class _TeamCalendarScreenState
       backgroundColor:
           theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text(
-          'Calendario',
+        title: Text(
+          widget.title,
         ),
       ),
       body: SafeArea(
         top: false,
         child: StreamBuilder<
             List<TeamMatchSummary>>(
-          stream:
-              _repository.watchAllMatches(),
+          stream: widget.tournamentId == null
+              ? _repository.watchAllMatches()
+              : _repository.watchMatchesForTournament(
+                  widget.tournamentId!,
+                ),
           builder: (
             context,
             matchSnapshot,

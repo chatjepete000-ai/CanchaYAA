@@ -241,6 +241,60 @@ service cloud.firestore {
           && !existsAfter(/databases/$(database)/documents/teamBookings/$(teamSlotId(data.awayTeamId, data.startsAt))));
     }
 
+    // ------------------------------------------------------------
+    // RESULTADOS (F08)
+    // ------------------------------------------------------------
+    //
+    // Marcadores: enteros de 0 a 99.
+    // Cada publicación o corrección deja una entrada inmutable en
+    // tournamentMatches/{matchId}/resultHistory/v{resultVersion}.
+    // ------------------------------------------------------------
+
+    function validMatchScores(data) {
+      return data.homeScore is int
+        && data.homeScore >= 0
+        && data.homeScore <= 99
+        && data.awayScore is int
+        && data.awayScore >= 0
+        && data.awayScore <= 99;
+    }
+
+    function resultHistoryWritten(matchId, version) {
+      let entryId = 'v' + string(version);
+      return existsAfter(
+        /databases/$(database)/documents/tournamentMatches/$(matchId)/resultHistory/$(entryId)
+      );
+    }
+
+    function validResultHistoryEntry(matchId, entryId, data) {
+      let before = get(/databases/$(database)/documents/tournamentMatches/$(matchId)).data;
+      let after = getAfter(/databases/$(database)/documents/tournamentMatches/$(matchId)).data;
+      return isLeagueAdmin(before.leagueId)
+        && data.keys().hasAll(['action', 'homeScore', 'awayScore',
+          'previousHomeScore', 'previousAwayScore', 'reason',
+          'changedByUserId', 'changedAt'])
+        && data.keys().hasOnly(['action', 'homeScore', 'awayScore',
+          'previousHomeScore', 'previousAwayScore', 'reason',
+          'changedByUserId', 'changedAt'])
+        && after.status == 'completed'
+        && after.resultVersion is int
+        && after.resultVersion == before.get('resultVersion', 0) + 1
+        && entryId == 'v' + string(after.resultVersion)
+        && data.homeScore == after.homeScore
+        && data.awayScore == after.awayScore
+        && data.previousHomeScore == before.homeScore
+        && data.previousAwayScore == before.awayScore
+        && data.changedByUserId == request.auth.uid
+        && data.changedAt == request.time
+        && data.reason is string
+        && data.reason.size() <= 240
+        && (
+          (before.status == 'scheduled' && data.action == 'published')
+          || (before.status == 'completed' && data.action == 'corrected'
+            && data.reason.size() >= 5)
+        );
+    }
+
     function validMatchVenue(data, matchId) {
       return data.keys().hasAll(['courtId', 'courtName', 'startsAt', 'bookingId'])
         && courtText(data.courtId, 128) && courtText(data.courtName, 100)
@@ -436,6 +490,53 @@ service cloud.firestore {
             'status',
             'updatedAt'
           ]);
+
+      allow delete: if false;
+    }
+
+    // ============================================================
+    // TORNEOS PÚBLICOS (F05)
+    // ============================================================
+    //
+    // tournaments/{id} solo lo leen los administradores de la liga.
+    // publicTournaments/{id} contiene solo los datos deportivos que
+    // cualquier usuario autenticado puede consultar (nombre,
+    // categoría, ciudad, temporada, formato y estado).
+    //
+    // Solo el administrador de la liga lo escribe y siempre debe
+    // coincidir con el estado final de tournaments/{id}.
+    // ============================================================
+
+    function validPublicTournament(data, tournamentId) {
+      let tournament = getAfter(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
+      return existsAfter(/databases/$(database)/documents/tournaments/$(tournamentId))
+        && data.keys().hasAll(['leagueId', 'name', 'category', 'city',
+          'season', 'format', 'status', 'updatedAt'])
+        && data.keys().hasOnly(['leagueId', 'name', 'category', 'city',
+          'season', 'format', 'status', 'updatedAt'])
+        && data.leagueId == tournament.leagueId
+        && data.name == tournament.name
+        && data.category == tournament.category
+        && data.city == tournament.city
+        && data.season == tournament.get('season', '')
+        && data.format == tournament.format
+        && data.status == tournament.status
+        && data.updatedAt == request.time;
+    }
+
+    match /publicTournaments/{tournamentId} {
+
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.leagueId is string
+        && isLeagueAdmin(request.resource.data.leagueId)
+        && validPublicTournament(request.resource.data, tournamentId);
+
+      allow update: if isSignedIn()
+        && request.resource.data.leagueId == resource.data.leagueId
+        && isLeagueAdmin(resource.data.leagueId)
+        && validPublicTournament(request.resource.data, tournamentId);
 
       allow delete: if false;
     }
@@ -1645,30 +1746,88 @@ allow read: if isSignedIn();
           || !existsAfter(/databases/$(database)/documents/courtBookings/$(resource.data.bookingId)));
 
       // ----------------------------------------------------------
-      // PUBLICAR RESULTADO
+      // PUBLICAR RESULTADO (F08)
       // ----------------------------------------------------------
       //
       // Solo administrador de liga.
       //
       //   scheduled -> completed
       //
-      // Solo pueden cambiar: status, homeScore, awayScore y
-      // updatedAt. Cancha, horario y reserva se conservan como
-      // historial del partido disputado.
+      // El partido debe tener horario asignado (startsAt).
+      // Solo pueden cambiar: status, homeScore, awayScore,
+      // resultVersion y updatedAt. Cancha, horario y reserva se
+      // conservan como historial del partido disputado.
+      //
+      // En el MISMO batch/transacción debe crearse
+      // tournamentMatches/{matchId}/resultHistory/v1.
       // ----------------------------------------------------------
 
       allow update: if isSignedIn() && isLeagueAdmin(resource.data.leagueId)
         && resource.data.status == 'scheduled'
         && resource.data.homeScore == null
         && resource.data.awayScore == null
+        && 'startsAt' in resource.data
         && request.resource.data.status == 'completed'
-        && request.resource.data.homeScore is int
-        && request.resource.data.homeScore >= 0
-        && request.resource.data.awayScore is int
-        && request.resource.data.awayScore >= 0
+        && validMatchScores(request.resource.data)
+        && request.resource.data.resultVersion == 1
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['status', 'homeScore', 'awayScore', 'updatedAt'])
-        && request.resource.data.updatedAt == request.time;
+          .hasOnly(['status', 'homeScore', 'awayScore', 'resultVersion', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time
+        && resultHistoryWritten(matchId, 1);
+
+      // ----------------------------------------------------------
+      // CORREGIR RESULTADO (F08)
+      // ----------------------------------------------------------
+      //
+      // Solo administrador de liga.
+      //
+      //   completed -> completed
+      //
+      // El marcador debe cambiar y resultVersion aumenta en 1.
+      // En el MISMO batch/transacción debe crearse
+      // resultHistory/v{resultVersion} con el motivo. Como el
+      // historial es inmutable y su ID depende de la versión, un
+      // reintento de la misma corrección no se aplica dos veces.
+      // La tabla se calcula desde los marcadores finales, así que
+      // una corrección nunca suma dos veces.
+      // ----------------------------------------------------------
+
+      allow update: if isSignedIn() && isLeagueAdmin(resource.data.leagueId)
+        && resource.data.status == 'completed'
+        && request.resource.data.status == 'completed'
+        && validMatchScores(request.resource.data)
+        && (request.resource.data.homeScore != resource.data.homeScore
+          || request.resource.data.awayScore != resource.data.awayScore)
+        && request.resource.data.resultVersion
+          == resource.data.get('resultVersion', 0) + 1
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['homeScore', 'awayScore', 'resultVersion', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time
+        && resultHistoryWritten(matchId, request.resource.data.resultVersion);
+
+      // ----------------------------------------------------------
+      // HISTORIAL DE RESULTADOS (F08)
+      // ----------------------------------------------------------
+      //
+      // tournamentMatches/{matchId}/resultHistory/v{n}
+      //
+      // Quién, cuándo, por qué y qué marcador había antes.
+      // Solo lo leen los administradores de la liga (contiene el
+      // identificador interno de quien capturó). Es inmutable.
+      // ----------------------------------------------------------
+
+      match /resultHistory/{entryId} {
+
+        allow read: if isSignedIn()
+          && isLeagueAdmin(
+            get(/databases/$(database)/documents/tournamentMatches/$(matchId)).data.leagueId
+          );
+
+        allow create: if isSignedIn()
+          && validResultHistoryEntry(matchId, entryId, request.resource.data);
+
+        allow update, delete: if false;
+      }
 
       // ----------------------------------------------------------
       // BORRAR (solo para regenerar calendario sin resultados)
