@@ -525,8 +525,46 @@ class _LeagueTournamentsScreen extends StatelessWidget {
                     '${tournament.category} · ${tournament.format.label}\n${tournament.status.label}',
                   ),
                   isThreeLine: true,
-                  trailing: const Icon(
-                    Icons.chevron_right,
+                  // F05: cambiar el estado actualiza también la ficha
+                  // pública (sección Torneos) en el mismo batch.
+                  trailing: PopupMenuButton<TournamentStatus>(
+                    tooltip: 'Cambiar estado',
+                    icon: const Icon(Icons.more_vert),
+                    onSelected: (status) async {
+                      final messenger =
+                          ScaffoldMessenger.of(context);
+
+                      try {
+                        await repository.updateTournamentStatus(
+                          tournamentId: tournament.id,
+                          status: status,
+                        );
+
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Estado actualizado: ${status.label}.',
+                            ),
+                          ),
+                        );
+                      } catch (_) {
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'No se pudo cambiar el estado del torneo.',
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      for (final status in TournamentStatus.values)
+                        CheckedPopupMenuItem<TournamentStatus>(
+                          value: status,
+                          checked: status == tournament.status,
+                          child: Text(status.label),
+                        ),
+                    ],
                   ),
                 ),
               );

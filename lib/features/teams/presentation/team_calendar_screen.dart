@@ -1,11 +1,9 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import '../../courts/domain/court.dart';
+import '../../courts/presentation/court_directions.dart';
 import '../data/public_team_repository.dart';
 import '../data/team_match_repository.dart';
 import '../domain/public_team.dart';
@@ -1588,77 +1586,14 @@ class _CalendarError
 Future<void> _openCourt(
   BuildContext context,
   TeamMatchSummary match,
-) async {
-  final courtId =
-      match.courtId?.trim() ??
-          '';
-
-  if (courtId.isEmpty) {
-    _showMessage(
-      context,
-      'Este partido todavía no tiene cancha asignada.',
-    );
-
-    return;
-  }
-
-  try {
-    final snapshot =
-        await FirebaseFirestore
-            .instance
-            .collection(
-              'courts',
-            )
-            .doc(
-              courtId,
-            )
-            .get();
-
-    final data =
-        snapshot.data();
-
-    if (!snapshot.exists ||
-        data == null) {
-      if (context.mounted) {
-        _showMessage(
-          context,
-          'No se encontró la información de la cancha.',
-        );
-      }
-
-      return;
-    }
-
-    final court =
-        Court.fromMap(
-      snapshot.id,
-      data,
-    );
-
-    final opened =
-        await launchUrl(
-      court.directionsUri,
-      mode:
-          LaunchMode.externalApplication,
-    );
-
-    if (!opened &&
-        context.mounted) {
-      _showMessage(
-        context,
-        'No se pudo abrir la aplicación de mapas.',
-      );
-    }
-  } catch (_) {
-    if (!context.mounted) {
-      return;
-    }
-
-    _showMessage(
-      context,
-      'No se pudo abrir la ubicación de la cancha.',
-    );
-  }
+) {
+  // F07: maneja falta de coordenadas, sin internet y mapa no
+  // disponible mostrando la dirección.
+  return openCourtDirections(
+    context,
+    courtId: match.courtId,
+    courtName: match.courtName,
+  );
 }
 
 // ================================================================
@@ -2075,22 +2010,6 @@ String _formatTime12(
           );
 
   return '$hour:$minute $period';
-}
-
-void _showMessage(
-  BuildContext context,
-  String message,
-) {
-  ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(
-    SnackBar(
-      content:
-          Text(
-        message,
-      ),
-    ),
-  );
 }
 
 String _dayChipLabel(

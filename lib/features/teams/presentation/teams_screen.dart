@@ -6,6 +6,7 @@ import '../data/team_repository.dart';
 import '../domain/team_models.dart';
 import 'player_join_screen.dart';
 import 'team_calendar_screen.dart';
+import 'team_lineup_screen.dart';
 import 'team_manager_screen.dart';
 import 'widgets/team_match_panel.dart';
 
@@ -1111,6 +1112,44 @@ class _PlayerTeamCard
                       label:
                           const Text(
                         'Ver calendario',
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(
+                    height: 8,
+                  ),
+
+                  // F04: los jugadores consultan la alineación;
+                  // solo el encargado la modifica.
+                  SizedBox(
+                    width:
+                        double.infinity,
+                    child:
+                        OutlinedButton.icon(
+                      onPressed:
+                          () {
+                        Navigator.of(
+                          context,
+                        ).push(
+                          MaterialPageRoute<void>(
+                            builder:
+                                (_) =>
+                                    TeamLineupScreen(
+                              team: team,
+                              canEdit: false,
+                            ),
+                          ),
+                        );
+                      },
+                      icon:
+                          const Icon(
+                        CupertinoIcons
+                            .sportscourt,
+                      ),
+                      label:
+                          const Text(
+                        'Ver alineación',
                       ),
                     ),
                   ),

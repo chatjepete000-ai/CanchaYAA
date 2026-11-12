@@ -1,9 +1,7 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import '../../../courts/domain/court.dart';
+import '../../../courts/presentation/court_directions.dart';
 import '../../data/team_match_repository.dart';
 
 class TeamMatchPanel extends StatelessWidget {
@@ -292,77 +290,14 @@ class _NextMatchCard extends StatelessWidget {
 
   Future<void> _openCourt(
     BuildContext context,
-  ) async {
-    final courtId =
-        match.courtId?.trim() ?? '';
-
-    if (courtId.isEmpty) {
-      _showMessage(
-        context,
-        'Este partido todavía no tiene una cancha asignada.',
-      );
-
-      return;
-    }
-
-    try {
-      // ==========================================================
-      // CONSULTAR LA CANCHA QUE ASIGNÓ EL ADMINISTRADOR
-      // ==========================================================
-
-      final snapshot =
-          await FirebaseFirestore.instance
-              .collection(
-                'courts',
-              )
-              .doc(
-                courtId,
-              )
-              .get();
-
-      final data = snapshot.data();
-
-      if (!snapshot.exists ||
-          data == null) {
-        if (context.mounted) {
-          _showMessage(
-            context,
-            'No se encontró la información de la cancha.',
-          );
-        }
-
-        return;
-      }
-
-      final court = Court.fromMap(
-        snapshot.id,
-        data,
-      );
-
-      // ==========================================================
-      // ABRIR MAPA / NAVEGACIÓN
-      // ==========================================================
-
-      final opened = await launchUrl(
-        court.directionsUri,
-        mode: LaunchMode.externalApplication,
-      );
-
-      if (!opened &&
-          context.mounted) {
-        _showMessage(
-          context,
-          'No se pudo abrir la aplicación de mapas.',
-        );
-      }
-    } catch (error) {
-      if (context.mounted) {
-        _showMessage(
-          context,
-          'No se pudo abrir la ubicación de la cancha.',
-        );
-      }
-    }
+  ) {
+    // F07: maneja falta de coordenadas, sin internet y mapa no
+    // disponible mostrando la dirección.
+    return openCourtDirections(
+      context,
+      courtId: match.courtId,
+      courtName: match.courtName,
+    );
   }
 
   @override
@@ -955,25 +890,6 @@ class _InfoBox
       ),
     );
   }
-}
-
-// ================================================================
-// MOSTRAR MENSAJE
-// ================================================================
-
-void _showMessage(
-  BuildContext context,
-  String message,
-) {
-  ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(
-    SnackBar(
-      content: Text(
-        message,
-      ),
-    ),
-  );
 }
 
 // ================================================================

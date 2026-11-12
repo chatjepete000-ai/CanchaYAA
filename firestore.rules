@@ -542,6 +542,69 @@ service cloud.firestore {
     }
 
     // ============================================================
+    // ALINEACIONES (F04)
+    // ============================================================
+    //
+    // teamLineups/{teamId}
+    //
+    // Lectura: jugadores y encargados del equipo, y administradores
+    // de la liga. Escritura: SOLO el encargado del equipo.
+    // Validaciones:
+    // - format y número de posiciones coherentes (5, 7 u 11).
+    // - Ningún jugador en dos posiciones.
+    // - Solo jugadores que pertenecen al equipo (playerUserIds).
+    // ============================================================
+
+    function lineupSlotCount(format) {
+      return format == 'football5' ? 5
+        : format == 'football7' ? 7
+        : 11;
+    }
+
+    function validLineup(data, teamId) {
+      let team = teamData(teamId);
+      let filled = data.slots.removeAll(['']);
+      return data.keys().hasAll(['teamId', 'leagueId', 'tournamentId',
+          'format', 'formation', 'slots', 'playerNames',
+          'updatedByUserId', 'updatedAt'])
+        && data.keys().hasOnly(['teamId', 'leagueId', 'tournamentId',
+          'format', 'formation', 'slots', 'playerNames',
+          'updatedByUserId', 'updatedAt'])
+        && data.teamId == teamId
+        && data.leagueId == team.leagueId
+        && data.tournamentId == team.tournamentId
+        && data.format in ['football5', 'football7', 'football11']
+        && data.formation is string
+        && data.formation.size() > 0
+        && data.formation.size() <= 10
+        && data.slots is list
+        && data.playerNames is list
+        && data.slots.size() == lineupSlotCount(data.format)
+        && data.playerNames.size() == data.slots.size()
+        && filled.toSet().size() == filled.size()
+        && filled.toSet().hasOnly(team.playerUserIds)
+        && data.updatedByUserId == request.auth.uid
+        && data.updatedAt == request.time;
+    }
+
+    match /teamLineups/{teamId} {
+
+      allow read: if isSignedIn()
+        && teamExists(teamId)
+        && (
+          request.auth.uid in teamData(teamId).managerUserIds
+          || request.auth.uid in teamData(teamId).playerUserIds
+          || isLeagueAdmin(teamData(teamId).leagueId)
+        );
+
+      allow create, update: if isSignedIn()
+        && isTeamManagerFromTeamDocument(teamId)
+        && validLineup(request.resource.data, teamId);
+
+      allow delete: if false;
+    }
+
+    // ============================================================
     // EQUIPOS
     // ============================================================
 

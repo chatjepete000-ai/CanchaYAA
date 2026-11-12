@@ -10,6 +10,7 @@ import '../data/team_join_code_repository.dart';
 import '../data/team_repository.dart';
 import '../domain/team_join_code.dart';
 import '../domain/team_models.dart';
+import 'team_lineup_screen.dart';
 import 'team_roster_screen.dart';
 
 class TeamManagerScreen extends StatefulWidget {
@@ -131,6 +132,34 @@ class _TeamManagerScreenState
                     builder: (_) =>
                         TeamRosterScreen(
                       team: _team,
+                    ),
+                  ),
+                );
+              },
+            ),
+
+            const SizedBox(
+              height: 12,
+            ),
+
+            // =====================================================
+            // ALINEACIÓN (F04)
+            // =====================================================
+
+            _ManagerActionCard(
+              icon:
+                  CupertinoIcons.sportscourt,
+              title:
+                  'Alineación',
+              subtitle:
+                  'Arrastra a tus jugadores a sus posiciones y exporta la imagen.',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        TeamLineupScreen(
+                      team: _team,
+                      canEdit: true,
                     ),
                   ),
                 );

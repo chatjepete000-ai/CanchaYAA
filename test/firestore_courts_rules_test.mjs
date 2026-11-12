@@ -68,7 +68,9 @@ await check(await commit('other',assignment('m2')),false,'cannot double-book ano
 await check(await commit('admin',[{delete:path(`courtBookings/${id}`)}]),false,'cannot release assigned booking alone');
 await check(await commit('admin',assignment('m2',new Date(start.getTime()+3600000))),false,'overlapping off-grid hour rejected');
 await check(await request(':runQuery','player',{structuredQuery:{from:[{collectionId:'tournamentMatches'}],where:{compositeFilter:{op:'AND',filters:[{fieldFilter:{field:{fieldPath:'courtId'},op:'EQUAL',value:{stringValue:'c'}}},{fieldFilter:{field:{fieldPath:'status'},op:'EQUAL',value:{stringValue:'scheduled'}}}]}}}}),true,'player can query upcoming court matches');
-await check(await request('/tournamentMatches/m2','player',null,'GET'),false,'unpublished match remains private');
+// El calendario (tournamentMatches) es de lectura pública para usuarios
+// autenticados; escribirlo sigue reservado al administrador de la liga.
+await check(await request('/tournamentMatches/m2','player',null,'GET'),true,'signed-in player reads the public calendar');
 const next = new Date(start.getTime()+7200000);
 await check(await commit('admin',assignment('m',next)),false,'reschedule must release old slot');
 await check(await commit('admin',[...assignment('m',next),{delete:path(`courtBookings/${id}`)},...['a','b'].map(teamId => ({delete:path(`teamBookings/${teamId}_${start.getTime()}`)}))]),true,'atomic reschedule releases old slot');
