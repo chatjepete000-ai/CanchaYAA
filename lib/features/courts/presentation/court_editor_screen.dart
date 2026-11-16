@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../location/data/location_controller.dart';
 import '../data/court_repository.dart';
 import '../domain/court.dart';
 import 'court_map.dart';
@@ -18,7 +19,7 @@ class _CourtEditorScreenState extends State<CourtEditorScreen> {
   late final _name = TextEditingController(text: widget.court?.name);
   late final _address = TextEditingController(text: widget.court?.address);
   late final _city = TextEditingController(
-    text: widget.court?.city ?? 'Montemorelos',
+    text: widget.court?.city ?? LocationController.instance.current.city,
   );
   late String _sport = widget.court?.sport ?? 'Fútbol 7';
   late LatLng? _point = widget.court?.hasCoordinates == true
@@ -68,7 +69,11 @@ class _CourtEditorScreenState extends State<CourtEditorScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: Text(widget.court == null ? 'Registrar cancha' : 'Editar cancha'),
+      title: Text(
+        widget.court == null || widget.court!.id.isEmpty
+            ? 'Registrar cancha'
+            : 'Editar cancha',
+      ),
     ),
     body: AbsorbPointer(
       absorbing: _saving,
@@ -115,7 +120,9 @@ class _CourtEditorScreenState extends State<CourtEditorScreen> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(22),
                 child: CourtMap(
-                  center: _point ?? montemorelosCenter,
+                  center: _point ??
+                      LocationController.instance.current.point ??
+                      montemorelosCenter,
                   onTap: (point) => setState(() => _point = point),
                   markers: [
                     if (_point != null)

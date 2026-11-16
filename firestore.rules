@@ -457,6 +457,31 @@ service cloud.firestore {
     // USUARIOS
     // ============================================================
 
+    // ------------------------------------------------------------
+    // CIUDAD ELEGIDA POR EL USUARIO
+    // ------------------------------------------------------------
+    //
+    // users/{uid}.preferredLocation = {city, state, latitude,
+    // longitude}. Coordenadas opcionales (null) o dentro de rango.
+    // ------------------------------------------------------------
+
+    function validPreferredLocation(location) {
+      return location is map
+        && location.keys().hasAll(['city', 'state', 'latitude', 'longitude'])
+        && location.keys().hasOnly(['city', 'state', 'latitude', 'longitude'])
+        && location.city is string
+        && location.city.size() > 0
+        && location.city.size() <= 100
+        && location.state is string
+        && location.state.size() <= 100
+        && (
+          (location.latitude == null && location.longitude == null)
+          || (location.latitude is number && location.longitude is number
+            && location.latitude >= -90 && location.latitude <= 90
+            && location.longitude >= -180 && location.longitude <= 180)
+        );
+    }
+
     match /users/{userId} {
 
       allow read: if isOwner(userId);
@@ -475,8 +500,13 @@ service cloud.firestore {
             'phone',
             'photoUrl',
             'position',
+            'preferredLocation',
             'updatedAt'
-          ]);
+          ])
+        && (
+          !('preferredLocation' in request.resource.data)
+          || validPreferredLocation(request.resource.data.preferredLocation)
+        );
 
       allow delete: if false;
     }

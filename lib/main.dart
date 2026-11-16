@@ -2,6 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'app/app.dart';
+import 'features/location/data/location_controller.dart';
 import 'features/notifications/services/match_alert_service.dart';
 import 'features/notifications/services/notification_service.dart';
 import 'firebase_options.dart';
@@ -22,6 +23,9 @@ Future<void> main() async {
   try {
     await MatchAlertService.instance.start();
   } catch (_) {}
+
+  // Ciudad elegida por el usuario (Inicio, Canchas y Torneos).
+  LocationController.instance.start();
 
   runApp(const CanchaYaApp());
 }

@@ -5,6 +5,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/theme_controller.dart';
+import '../../location/data/location_controller.dart';
+import '../../location/presentation/location_picker_screen.dart';
 import '../../notifications/data/notification_repository.dart';
 import '../../notifications/domain/app_notification.dart';
 import '../../notifications/presentation/notification_center_screen.dart';
@@ -260,50 +262,81 @@ class _HomeContent extends StatelessWidget {
 
               const SizedBox(height: 8),
 
-              Row(
-                children: [
-                  const Icon(
-                    CupertinoIcons
-                        .location_fill,
-                    size: 15,
-                    color: _green,
-                  ),
-                  const SizedBox(width: 5),
-                  Flexible(
-                    child: Text(
-                      'Montemorelos, N.L.',
-                      maxLines: 1,
-                      overflow:
-                          TextOverflow
-                              .ellipsis,
-                      style: TextStyle(
-                        fontWeight:
-                            FontWeight.w600,
-                        fontSize: 13,
-                        color: isDark
-                            ? const Color(
-                                0xFFA6BAAF,
-                              )
-                            : const Color(
-                                0xFF607067,
+              // Selector de ciudad: muestra la ciudad elegida y al
+              // tocarlo abre "Elige tu ciudad".
+              ListenableBuilder(
+                listenable: LocationController.instance,
+                builder: (context, _) {
+                  final location =
+                      LocationController.instance.current;
+
+                  return Semantics(
+                    button: true,
+                    label: 'Cambiar ciudad. Actual: ${location.label}',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                const LocationPickerScreen(),
+                          ),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 4,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              CupertinoIcons
+                                  .location_fill,
+                              size: 15,
+                              color: _green,
+                            ),
+                            const SizedBox(width: 5),
+                            Flexible(
+                              child: Text(
+                                location.label,
+                                maxLines: 1,
+                                overflow:
+                                    TextOverflow
+                                        .ellipsis,
+                                style: TextStyle(
+                                  fontWeight:
+                                      FontWeight.w600,
+                                  fontSize: 13,
+                                  color: isDark
+                                      ? const Color(
+                                          0xFFA6BAAF,
+                                        )
+                                      : const Color(
+                                          0xFF607067,
+                                        ),
+                                ),
                               ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              CupertinoIcons
+                                  .chevron_down,
+                              size: 11,
+                              color: isDark
+                                  ? const Color(
+                                      0xFF82968B,
+                                    )
+                                  : const Color(
+                                      0xFF6C786F,
+                                    ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    CupertinoIcons
-                        .chevron_down,
-                    size: 11,
-                    color: isDark
-                        ? const Color(
-                            0xFF82968B,
-                          )
-                        : const Color(
-                            0xFF6C786F,
-                          ),
-                  ),
-                ],
+                  );
+                },
               ),
             ],
           ),
@@ -744,7 +777,8 @@ class _HomeContent extends StatelessWidget {
         const SizedBox(height: 13),
         Semantics(
           button: true,
-          label: 'Explorar canchas en Montemorelos',
+          label:
+              'Explorar canchas en ${LocationController.instance.current.city}',
           child: InkWell(
             onTap: explore,
             borderRadius: BorderRadius.circular(22),
@@ -769,17 +803,23 @@ class _HomeContent extends StatelessWidget {
                       color: isDark ? _darkCard : Colors.white,
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.map_outlined, color: _green),
-                        SizedBox(width: 10),
+                        const Icon(Icons.map_outlined, color: _green),
+                        const SizedBox(width: 10),
                         Expanded(
-                          child: Text(
-                            'Explorar canchas en Montemorelos',
-                            style: TextStyle(fontWeight: FontWeight.w800),
+                          child: ListenableBuilder(
+                            listenable: LocationController.instance,
+                            builder: (context, _) => Text(
+                              'Explorar canchas en '
+                              '${LocationController.instance.current.city}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
                           ),
                         ),
-                        Icon(Icons.arrow_forward, color: _green),
+                        const Icon(Icons.arrow_forward, color: _green),
                       ],
                     ),
                   ),

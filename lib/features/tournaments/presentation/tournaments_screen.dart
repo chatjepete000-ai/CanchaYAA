@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/widgets/empty_state_card.dart';
 import '../../leagues/domain/league_models.dart';
+import '../../location/data/location_controller.dart';
 import '../data/public_tournament_repository.dart';
 import '../domain/public_tournament.dart';
 import 'tournament_detail_screen.dart';
@@ -83,11 +84,33 @@ class TournamentsScreen extends StatelessWidget {
                 'aparecerá aquí.',
           );
         } else {
-          content = Column(
-            children: [
-              for (final tournament in snapshot.data!)
-                _TournamentCard(tournament: tournament),
-            ],
+          // Los torneos de la ciudad elegida aparecen primero.
+          content = ListenableBuilder(
+            listenable: LocationController.instance,
+            builder: (context, _) {
+              final location = LocationController.instance.current;
+              final tournaments = [...snapshot.data!]
+                ..sort((a, b) {
+                  final localA = location.matchesCity(a.city);
+                  final localB = location.matchesCity(b.city);
+
+                  if (localA != localB) return localA ? -1 : 1;
+
+                  return a.name.toLowerCase().compareTo(
+                        b.name.toLowerCase(),
+                      );
+                });
+
+              return Column(
+                children: [
+                  for (final tournament in tournaments)
+                    _TournamentCard(
+                      tournament: tournament,
+                      inMyCity: location.matchesCity(tournament.city),
+                    ),
+                ],
+              );
+            },
           );
         }
 
@@ -107,9 +130,11 @@ class TournamentsScreen extends StatelessWidget {
 class _TournamentCard extends StatelessWidget {
   const _TournamentCard({
     required this.tournament,
+    this.inMyCity = false,
   });
 
   final PublicTournament tournament;
+  final bool inMyCity;
 
   @override
   Widget build(BuildContext context) {
@@ -178,7 +203,14 @@ class _TournamentCard extends StatelessWidget {
                         style: theme.textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 8),
-                      _StatusChip(status: tournament.status),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          _StatusChip(status: tournament.status),
+                          if (inMyCity) const _MyCityChip(),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -225,6 +257,42 @@ class _StatusChip extends StatelessWidget {
           fontWeight: FontWeight.w800,
           fontSize: 12,
         ),
+      ),
+    );
+  }
+}
+
+class _MyCityChip extends StatelessWidget {
+  const _MyCityChip();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE9B72B).withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(100),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            CupertinoIcons.location_fill,
+            size: 12,
+            color: colors.onSurface,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'En tu ciudad',
+            style: TextStyle(
+              color: colors.onSurface,
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
+            ),
+          ),
+        ],
       ),
     );
   }
