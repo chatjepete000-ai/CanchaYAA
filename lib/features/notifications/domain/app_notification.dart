@@ -10,6 +10,8 @@ enum AppNotificationType {
   matchReminder,
   tournamentUpdate,
   resultPublished,
+  matchPostponed,
+  matchCancelled,
   system,
 }
 
@@ -44,6 +46,12 @@ extension AppNotificationTypeX
       case AppNotificationType.resultPublished:
         return 'result_published';
 
+      case AppNotificationType.matchPostponed:
+        return 'match_postponed';
+
+      case AppNotificationType.matchCancelled:
+        return 'match_cancelled';
+
       case AppNotificationType.system:
         return 'system';
     }
@@ -77,6 +85,12 @@ extension AppNotificationTypeX
 
       case AppNotificationType.resultPublished:
         return 'Resultado publicado';
+
+      case AppNotificationType.matchPostponed:
+        return 'Partido suspendido';
+
+      case AppNotificationType.matchCancelled:
+        return 'Partido cancelado';
 
       case AppNotificationType.system:
         return 'CanchaYA';
@@ -113,6 +127,12 @@ extension AppNotificationTypeX
 
       case 'result_published':
         return AppNotificationType.resultPublished;
+
+      case 'match_postponed':
+        return AppNotificationType.matchPostponed;
+
+      case 'match_cancelled':
+        return AppNotificationType.matchCancelled;
 
       case 'system':
       default:

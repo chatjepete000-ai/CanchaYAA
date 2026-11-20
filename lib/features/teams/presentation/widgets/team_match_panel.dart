@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../courts/presentation/court_directions.dart';
 import '../../data/team_match_repository.dart';
+import '../../../tournaments/domain/match_status.dart';
 
 class TeamMatchPanel extends StatelessWidget {
   const TeamMatchPanel({
@@ -646,7 +647,11 @@ class _PostponedMatchCard
                   CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Partido pospuesto',
+                  matchStatusDetail(
+                    status: match.status,
+                    reason: match.statusReason,
+                    note: match.statusNote,
+                  ),
                   style: TextStyle(
                     color: colors
                         .onErrorContainer,
@@ -661,7 +666,7 @@ class _PostponedMatchCard
 
                 Text(
                   'vs ${match.opponentName(teamId)}. '
-                  'Espera la nueva cancha, fecha y horario.',
+                  'Te avisaremos la nueva cancha, fecha y horario.',
                   style: TextStyle(
                     color: colors
                         .onErrorContainer,

@@ -265,3 +265,48 @@ String resultFullBody({
       : 'Resultado final: $home $homeScore - $awayScore $away. '
           'Consulta la tabla de posiciones en Torneos.';
 }
+
+// ================================================================
+// SUSPENSIÓN O CANCELACIÓN
+// ================================================================
+
+/// Clave del aviso: única por cada vez que cambia el estado.
+String statusChangeEventKey({
+  required bool cancelled,
+  required DateTime changedAt,
+}) =>
+    '${cancelled ? 'cancel' : 'susp'}_${changedAt.toUtc().millisecondsSinceEpoch}';
+
+String statusChangeTitle({
+  required bool cancelled,
+  required String home,
+  required String away,
+}) {
+  final title = '${cancelled ? 'Cancelado' : 'Suspendido'}: $home vs $away';
+
+  return title.length <= 120 ? title : '${title.substring(0, 117)}...';
+}
+
+/// [reasonLabel]: "Clima", "Cancha no disponible"... [note] opcional.
+String statusChangeFullBody({
+  required bool cancelled,
+  required String home,
+  required String away,
+  required String reasonLabel,
+  String note = '',
+  DateTime? previousStartsAt,
+}) {
+  final when = previousStartsAt == null
+      ? ''
+      : ' del ${alertDay(previousStartsAt)} a las '
+          '${alertTime(previousStartsAt)}';
+  final reason = note.trim().isEmpty
+      ? reasonLabel.toLowerCase()
+      : '${reasonLabel.toLowerCase()} (${note.trim()})';
+
+  return cancelled
+      ? 'Se canceló el partido $home vs $away$when por $reason. '
+          'No se jugará y no cuenta en la tabla.'
+      : 'Se suspendió el partido $home vs $away$when por $reason. '
+          'Te avisaremos cuando tenga nuevo horario.';
+}

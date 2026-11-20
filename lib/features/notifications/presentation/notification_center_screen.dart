@@ -997,6 +997,14 @@ class _NotificationRow
         return CupertinoIcons
             .flag_fill;
 
+      case AppNotificationType.matchPostponed:
+        return CupertinoIcons
+            .cloud_rain_fill;
+
+      case AppNotificationType.matchCancelled:
+        return CupertinoIcons
+            .xmark_octagon_fill;
+
       case AppNotificationType.system:
         return CupertinoIcons
             .bell_fill;
@@ -1299,6 +1307,14 @@ class _NotificationDetailsSheet
       case AppNotificationType.resultPublished:
         return CupertinoIcons
             .flag_fill;
+
+      case AppNotificationType.matchPostponed:
+        return CupertinoIcons
+            .cloud_rain_fill;
+
+      case AppNotificationType.matchCancelled:
+        return CupertinoIcons
+            .xmark_octagon_fill;
 
       case AppNotificationType.system:
         return CupertinoIcons

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../teams/data/team_match_repository.dart';
 import '../../../teams/domain/public_team.dart';
+import '../../domain/match_status.dart';
 
 // ================================================================
 // WIDGETS COMPARTIDOS DE LA SECCIÓN TORNEOS
@@ -153,8 +154,11 @@ class TournamentMatchCard extends StatelessWidget {
     final String statusText;
     if (match.isCompleted) {
       statusText = 'Finalizado';
-    } else if (match.isPostponed) {
-      statusText = 'Pospuesto';
+    } else if (match.isPostponed || match.isCancelled) {
+      statusText = matchStatusDetail(
+        status: match.status,
+        reason: match.statusReason,
+      );
     } else if (match.startsAt == null) {
       statusText = 'Por programar';
     } else {

@@ -235,6 +235,15 @@ service cloud.firestore {
           || getAfter(/databases/$(database)/documents/tournamentMatches/$(resource.data.matchId)).data.startsAt != resource.data.startsAt);
     }
 
+    // Motivo de una suspensión o cancelación.
+    function validMatchStatusReason(data) {
+      return data.statusReason in ['weather', 'court', 'other']
+        && (!('statusNote' in data)
+          || (data.statusNote is string
+            && data.statusNote.size() > 0
+            && data.statusNote.size() <= 140));
+    }
+
     function oldTeamSlotsReleased(data) {
       return !('startsAt' in data)
         || (!existsAfter(/databases/$(database)/documents/teamBookings/$(teamSlotId(data.homeTeamId, data.startsAt)))
@@ -1966,7 +1975,11 @@ allow read: if isSignedIn();
         && resource.data.status in ['scheduled', 'postponed']
         && request.resource.data.status == 'scheduled'
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['courtId', 'courtName', 'startsAt', 'bookingId', 'status', 'updatedAt'])
+          .hasOnly(['courtId', 'courtName', 'startsAt', 'bookingId', 'status',
+            'statusReason', 'statusNote', 'updatedAt'])
+        // Al reprogramar se borra el motivo de la suspensión.
+        && !('statusReason' in request.resource.data)
+        && !('statusNote' in request.resource.data)
         && validMatchVenue(request.resource.data, matchId)
         && (!('startsAt' in resource.data)
           || resource.data.startsAt == request.resource.data.startsAt
@@ -1992,11 +2005,42 @@ allow read: if isSignedIn();
         && resource.data.status == 'scheduled'
         && request.resource.data.status == 'postponed'
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['status', 'courtId', 'courtName', 'startsAt', 'bookingId', 'updatedAt'])
+          .hasOnly(['status', 'courtId', 'courtName', 'startsAt', 'bookingId',
+            'statusReason', 'statusNote', 'updatedAt'])
+        && validMatchStatusReason(request.resource.data)
         && !('courtId' in request.resource.data)
         && !('courtName' in request.resource.data)
         && !('startsAt' in request.resource.data)
         && !('bookingId' in request.resource.data)
+        && request.resource.data.updatedAt == request.time
+        && oldTeamSlotsReleased(resource.data)
+        && (!('bookingId' in resource.data)
+          || !existsAfter(/databases/$(database)/documents/courtBookings/$(resource.data.bookingId)));
+
+      // ----------------------------------------------------------
+      // CANCELAR PARTIDO (definitivo)
+      // ----------------------------------------------------------
+      //
+      //   scheduled | postponed -> cancelled
+      //
+      // Igual que suspender: sin cancha ni horario y con las
+      // reservas liberadas. No tiene marcador, no cuenta en la tabla
+      // y ya no se puede reprogramar ni capturar resultado.
+      // ----------------------------------------------------------
+
+      allow update: if isSignedIn() && isLeagueAdmin(resource.data.leagueId)
+        && resource.data.status in ['scheduled', 'postponed']
+        && request.resource.data.status == 'cancelled'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'courtId', 'courtName', 'startsAt', 'bookingId',
+            'statusReason', 'statusNote', 'updatedAt'])
+        && validMatchStatusReason(request.resource.data)
+        && !('courtId' in request.resource.data)
+        && !('courtName' in request.resource.data)
+        && !('startsAt' in request.resource.data)
+        && !('bookingId' in request.resource.data)
+        && request.resource.data.homeScore == null
+        && request.resource.data.awayScore == null
         && request.resource.data.updatedAt == request.time
         && oldTeamSlotsReleased(resource.data)
         && (!('bookingId' in resource.data)
@@ -2099,7 +2143,7 @@ allow read: if isSignedIn();
         && isLeagueAdmin(
           resource.data.leagueId
         )
-        && resource.data.status in ['scheduled', 'postponed']
+        && resource.data.status in ['scheduled', 'postponed', 'cancelled']
         && resource.data.homeScore == null
         && resource.data.awayScore == null
         && oldTeamSlotsReleased(resource.data)
@@ -2141,25 +2185,49 @@ allow read: if isSignedIn();
         && notificationId == request.resource.data.matchId + '_'
           + request.resource.data.data.eventKey + '_'
           + request.resource.data.recipientUserId
-        && isMatchTeamMember(
-          request.resource.data.matchId,
-          request.resource.data.recipientUserId
-        )
         && (
           (
-            request.resource.data.type in
-              ['match_created', 'match_updated', 'result_published']
+            isMatchTeamMember(
+              request.resource.data.matchId,
+              request.resource.data.recipientUserId
+            )
+            && (
+              (
+                request.resource.data.type in
+                  ['match_created', 'match_updated', 'result_published',
+                   'match_postponed', 'match_cancelled']
+                && request.resource.data.senderUserId == request.auth.uid
+                && isLeagueAdmin(
+                  get(/databases/$(database)/documents/tournamentMatches/$(request.resource.data.matchId)).data.leagueId
+                )
+              )
+              ||
+              (
+                request.resource.data.type == 'match_reminder'
+                && request.resource.data.recipientUserId == request.auth.uid
+                && request.resource.data.senderUserId == request.auth.uid
+                && request.resource.data.data.eventKey in ['r24', 'r1', 'r0']
+              )
+            )
+          )
+          ||
+          // 3) Resultados para el resto del torneo: el administrador
+          //    avisa a jugadores y encargados de los OTROS equipos
+          //    del mismo torneo. teamId dice a qué equipo pertenece
+          //    el destinatario y se verifica.
+          (
+            request.resource.data.type == 'result_published'
             && request.resource.data.senderUserId == request.auth.uid
             && isLeagueAdmin(
               get(/databases/$(database)/documents/tournamentMatches/$(request.resource.data.matchId)).data.leagueId
             )
-          )
-          ||
-          (
-            request.resource.data.type == 'match_reminder'
-            && request.resource.data.recipientUserId == request.auth.uid
-            && request.resource.data.senderUserId == request.auth.uid
-            && request.resource.data.data.eventKey in ['r24', 'r1', 'r0']
+            && request.resource.data.teamId is string
+            && isTeamMember(
+              request.resource.data.teamId,
+              request.resource.data.recipientUserId
+            )
+            && teamData(request.resource.data.teamId).tournamentId
+              == get(/databases/$(database)/documents/tournamentMatches/$(request.resource.data.matchId)).data.tournamentId
           )
         );
 

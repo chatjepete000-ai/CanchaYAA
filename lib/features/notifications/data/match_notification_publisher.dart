@@ -98,6 +98,45 @@ class MatchNotificationPublisher {
         'homeScore': homeScore,
         'awayScore': awayScore,
       },
+      includeTournament: true,
+    );
+  }
+
+  /// Avisa que el partido se suspendió o canceló, con el motivo.
+  Future<int> notifyStatusChange({
+    required String matchId,
+    required bool cancelled,
+    required String reasonLabel,
+    String note = '',
+    DateTime? previousStartsAt,
+  }) async {
+    final match = await _readMatch(matchId);
+    final names = await _teamNames(match);
+
+    return _sendToMembers(
+      matchId: matchId,
+      match: match,
+      eventKey: statusChangeEventKey(
+        cancelled: cancelled,
+        changedAt: DateTime.now(),
+      ),
+      type: cancelled ? 'match_cancelled' : 'match_postponed',
+      title: statusChangeTitle(
+        cancelled: cancelled,
+        home: names.home,
+        away: names.away,
+      ),
+      body: statusChangeFullBody(
+        cancelled: cancelled,
+        home: names.home,
+        away: names.away,
+        reasonLabel: reasonLabel,
+        note: note,
+        previousStartsAt: previousStartsAt,
+      ),
+      extra: <String, dynamic>{
+        'statusReason': (match['statusReason'] as String?) ?? '',
+      },
     );
   }
 
@@ -176,6 +215,57 @@ class MatchNotificationPublisher {
     return members;
   }
 
+  /// Jugadores y encargados de los OTROS equipos del torneo, con el
+  /// equipo de cada uno (lo verifica firestore.rules).
+  Future<Map<String, String>> _tournamentMembers(
+    Map<String, dynamic> match,
+  ) async {
+    final tournamentId = (match['tournamentId'] as String?) ?? '';
+    final playing = {
+      (match['homeTeamId'] as String?) ?? '',
+      (match['awayTeamId'] as String?) ?? '',
+    };
+
+    if (tournamentId.isEmpty) return const <String, String>{};
+
+    final result = <String, String>{};
+
+    try {
+      final teams = await _firestore
+          .collection('publicTeams')
+          .where('tournamentId', isEqualTo: tournamentId)
+          .get();
+
+      for (final doc in teams.docs) {
+        if (playing.contains(doc.id)) continue;
+
+        try {
+          final snapshot =
+              await _firestore.collection('teams').doc(doc.id).get();
+          final data = snapshot.data() ?? const <String, dynamic>{};
+
+          if (data['tournamentId'] != tournamentId) continue;
+
+          for (final field in ['playerUserIds', 'managerUserIds']) {
+            final ids = data[field];
+
+            if (ids is List) {
+              for (final id in ids.whereType<String>()) {
+                if (id.isNotEmpty) result.putIfAbsent(id, () => doc.id);
+              }
+            }
+          }
+        } catch (error) {
+          if (kDebugMode) debugPrint('Equipo sin leer: $error');
+        }
+      }
+    } catch (error) {
+      if (kDebugMode) debugPrint('Equipos del torneo sin leer: $error');
+    }
+
+    return result;
+  }
+
   Future<int> _sendToMembers({
     required String matchId,
     required Map<String, dynamic> match,
@@ -184,6 +274,7 @@ class MatchNotificationPublisher {
     required String title,
     required String body,
     required Map<String, dynamic> extra,
+    bool includeTournament = false,
   }) async {
     final user = _auth.currentUser;
 
@@ -191,7 +282,20 @@ class MatchNotificationPublisher {
       throw StateError('Debes iniciar sesión.');
     }
 
-    final recipients = await _members(match);
+    // uid -> equipo (null = uno de los dos equipos del partido).
+    final recipientTeams = <String, String?>{
+      for (final id in await _members(match)) id: null,
+    };
+
+    if (includeTournament) {
+      final others = await _tournamentMembers(match);
+
+      others.forEach((uid, teamId) {
+        recipientTeams.putIfAbsent(uid, () => teamId);
+      });
+    }
+
+    final recipients = recipientTeams.keys.toList();
     var failed = 0;
 
     // Cada aviso se escribe por separado: si uno ya existía (por un
@@ -217,6 +321,8 @@ class MatchNotificationPublisher {
             'readAt': null,
             'createdAt': FieldValue.serverTimestamp(),
             'senderUserId': user.uid,
+            if (recipientTeams[recipient] != null)
+              'teamId': recipientTeams[recipient],
             'matchId': matchId,
             'tournamentId': match['tournamentId'],
             'route': 'notifications',

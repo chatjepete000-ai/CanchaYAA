@@ -6,6 +6,7 @@ import '../../notifications/data/match_notification_publisher.dart';
 import '../data/match_result_repository.dart';
 import '../data/tournament_schedule_repository.dart';
 import '../domain/match_result.dart';
+import '../domain/match_status.dart';
 
 // ================================================================
 // F08 · CAPTURAR / CORREGIR RESULTADO (solo administrador de liga)
@@ -280,10 +281,16 @@ class _MatchResultScreenState
               children: [
                 _MatchHeader(match: match),
                 const SizedBox(height: 18),
-                if (match.status == 'postponed')
+                if (match.isCancelled)
                   const _Message(
-                    icon: CupertinoIcons.clock,
-                    text: 'El partido está pospuesto. '
+                    icon: CupertinoIcons.xmark_octagon,
+                    text: 'El partido se canceló. No se juega y no '
+                        'cuenta en la tabla.',
+                  )
+                else if (match.isPostponed)
+                  const _Message(
+                    icon: CupertinoIcons.cloud_rain,
+                    text: 'El partido está suspendido. '
                         'Reprográmalo antes de capturar el resultado.',
                   )
                 else if (!match.isCompleted &&
@@ -382,11 +389,10 @@ class _MatchHeader extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
-    final statusLabel = match.isCompleted
-        ? 'Finalizado'
-        : match.status == 'postponed'
-            ? 'Pospuesto'
-            : 'Programado';
+    final statusLabel = matchStatusDetail(
+      status: match.status,
+      reason: match.statusReason,
+    );
 
     return Container(
       padding: const EdgeInsets.all(18),

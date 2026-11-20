@@ -21,6 +21,8 @@ class TournamentMatchRecord {
     this.homeScore,
     this.awayScore,
     this.resultVersion = 0,
+    this.statusReason,
+    this.statusNote,
   });
 
   final String id;
@@ -47,7 +49,18 @@ class TournamentMatchRecord {
   final int? awayScore;
   final int resultVersion;
 
+  /// Motivo de la suspensión o cancelación (weather | court | other).
+  final String? statusReason;
+  final String? statusNote;
+
   bool get isCompleted => status == 'completed';
+
+  bool get isPostponed => status == 'postponed';
+
+  bool get isCancelled => status == 'cancelled';
+
+  /// Se puede suspender o cancelar mientras no se haya jugado.
+  bool get canChangeStatus => status == 'scheduled' || status == 'postponed';
 
   bool get hasResult =>
       homeScore != null && awayScore != null;
@@ -86,6 +99,8 @@ class TournamentMatchRecord {
       awayScore: (data['awayScore'] as num?)?.toInt(),
       resultVersion:
           (data['resultVersion'] as num?)?.toInt() ?? 0,
+      statusReason: data['statusReason'] as String?,
+      statusNote: data['statusNote'] as String?,
     );
   }
 }

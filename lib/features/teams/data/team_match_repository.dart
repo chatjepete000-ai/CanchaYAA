@@ -16,7 +16,13 @@ class TeamMatchSummary {
     this.homeScore,
     this.awayScore,
     this.roundNumber = 0,
+    this.statusReason,
+    this.statusNote,
   });
+
+  /// Motivo de la suspensión o cancelación (weather | court | other).
+  final String? statusReason;
+  final String? statusNote;
 
   final String id;
 
@@ -51,6 +57,9 @@ class TeamMatchSummary {
 
   bool get isPostponed =>
       status == 'postponed';
+
+  bool get isCancelled =>
+      status == 'cancelled';
 
   bool get isCompleted =>
       status == 'completed';
@@ -223,6 +232,12 @@ class TeamMatchSummary {
           _readNullableInt(
         data['awayScore'],
       ),
+
+      statusReason:
+          data['statusReason'] as String?,
+
+      statusNote:
+          data['statusNote'] as String?,
     );
   }
 

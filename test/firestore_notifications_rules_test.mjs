@@ -39,6 +39,7 @@ await check(await commit('owner',[
   write('teams/a',{name:'A',leagueId:'l',tournamentId:'t',managerUserIds:['managerA'],playerUserIds:['p1','p2']}),
   write('teams/b',{name:'B',leagueId:'l',tournamentId:'t',managerUserIds:['managerB'],playerUserIds:['q1']}),
   write('teams/c',{name:'C',leagueId:'l',tournamentId:'t',managerUserIds:[],playerUserIds:['outsider']}),
+  write('teams/d',{name:'D',leagueId:'l',tournamentId:'t2',managerUserIds:[],playerUserIds:['farAway']}),
   write('tournamentMatches/m',{leagueId:'l',tournamentId:'t',homeTeamId:'a',awayTeamId:'b',status:'scheduled'}),
 ]),true,'seed fixture');
 
@@ -78,5 +79,19 @@ await check(await request(`/notifications/m_sched_1_p1`,'p1',null,'GET'),true,'r
 await check(await request(`/notifications/m_sched_1_p1`,'p2',null,'GET'),false,'others cannot read it');
 await check(await commit('p1',[write('notifications/m_sched_1_p1',{isRead:true},['isRead'],['readAt'])]),true,'recipient marks as read');
 await check(await commit('p1',[{delete:path('notifications/m_sched_1_p1')}]),false,'notices cannot be deleted');
+
+// 4) Suspensión o cancelación (clima u otro motivo).
+await check(await send('admin',notice({type:'match_postponed',eventKey:'susp_1'})),true,'admin notifies a suspension');
+await check(await send('admin',notice({type:'match_cancelled',eventKey:'cancel_1',recipient:'q1'})),true,'admin notifies a cancellation');
+await check(await send('admin',notice({type:'match_postponed',eventKey:'susp_2',recipient:'outsider'})),false,'suspension notice only for both teams');
+await check(await send('managerA',notice({type:'match_cancelled',eventKey:'cancel_2',sender:'managerA',recipient:'q1'})),false,'team manager cannot notify a cancellation');
+
+// 5) Resultados para todo el torneo.
+await check(await send('admin',notice({type:'result_published',eventKey:'result_v1',recipient:'outsider',teamId:'c'})),true,'result reaches another team of the same tournament');
+await check(await send('admin',notice({type:'match_created',eventKey:'sched_20',recipient:'outsider',teamId:'c'})),false,'only results go to the whole tournament');
+await check(await send('admin',notice({type:'result_published',eventKey:'result_v2',recipient:'outsider',teamId:'a'})),false,'teamId must be the recipient team');
+await check(await send('admin',notice({type:'result_published',eventKey:'result_v1',recipient:'farAway',teamId:'d'})),false,'teams of another tournament do not receive it');
+await check(await send('admin',notice({type:'result_published',eventKey:'result_v3',recipient:'stranger',teamId:'c'})),false,'people outside any team do not receive it');
+await check(await send('managerA',notice({type:'result_published',eventKey:'result_v4',sender:'managerA',recipient:'outsider',teamId:'c'})),false,'team manager cannot broadcast results');
 
 console.log('All notification security tests passed.');

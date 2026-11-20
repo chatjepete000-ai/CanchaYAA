@@ -119,7 +119,10 @@ class CourtRepository {
           );
         }
       }
-      if (!current.exists || current.data()?['status'] != 'scheduled') {
+      // Un partido suspendido también se puede volver a programar.
+      final currentStatus = current.data()?['status'];
+      if (!current.exists ||
+          (currentStatus != 'scheduled' && currentStatus != 'postponed')) {
         throw StateError('Este partido ya no está disponible para programar.');
       }
       if (!courtDoc.exists || courtDoc.data()?['active'] != true) {
@@ -168,6 +171,12 @@ class CourtRepository {
         'courtName': court.name,
         'startsAt': Timestamp.fromDate(start),
         'bookingId': bookingId,
+        'status': 'scheduled',
+        // Al reprogramar se borra el motivo de la suspensión.
+        if (current.data()?.containsKey('statusReason') == true)
+          'statusReason': FieldValue.delete(),
+        if (current.data()?.containsKey('statusNote') == true)
+          'statusNote': FieldValue.delete(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
     });

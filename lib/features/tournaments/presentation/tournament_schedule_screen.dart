@@ -9,7 +9,9 @@ import '../../teams/domain/team_models.dart';
 import '../data/public_tournament_repository.dart';
 import '../data/tournament_schedule_repository.dart';
 import '../domain/round_robin_generator.dart';
+import '../domain/match_status.dart';
 import 'match_result_screen.dart';
+import 'match_status_sheet.dart';
 
 class TournamentScheduleScreen extends StatefulWidget {
   const TournamentScheduleScreen({
@@ -1473,16 +1475,25 @@ class _SavedMatchTile extends StatelessWidget {
   }
 
   // F08: un partido finalizado ya no se reprograma; solo se
-  // consulta o corrige su resultado. Un partido programado con
-  // horario puede reprogramarse o recibir su resultado.
+  // consulta o corrige su resultado. Uno programado puede cambiar de
+  // cancha u horario, recibir resultado, suspenderse o cancelarse.
+  // Uno suspendido se reprograma o se cancela. Uno cancelado ya no
+  // cambia.
   Future<void> _showOptions(BuildContext context) async {
     if (match.isCompleted) {
       _openResult(context);
       return;
     }
 
-    if (!match.canRecordResult) {
-      _openSchedule(context);
+    if (match.isCancelled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${matchStatusDetail(status: match.status, reason: match.statusReason, note: match.statusNote)}. '
+            'Un partido cancelado ya no se puede modificar.',
+          ),
+        ),
+      );
       return;
     }
 
@@ -1495,13 +1506,41 @@ class _SavedMatchTile extends StatelessWidget {
           children: [
             ListTile(
               leading: const Icon(Icons.edit_calendar_outlined),
-              title: const Text('Cambiar cancha u horario'),
+              title: Text(
+                match.isPostponed
+                    ? 'Reprogramar cancha y horario'
+                    : match.startsAt == null
+                        ? 'Programar cancha y horario'
+                        : 'Cambiar cancha u horario',
+              ),
               onTap: () => Navigator.pop(sheetContext, 'schedule'),
             ),
+            if (match.canRecordResult)
+              ListTile(
+                leading: const Icon(CupertinoIcons.sportscourt),
+                title: const Text('Capturar resultado'),
+                onTap: () => Navigator.pop(sheetContext, 'result'),
+              ),
+            if (!match.isPostponed)
+              ListTile(
+                leading: const Icon(CupertinoIcons.cloud_rain),
+                title: const Text('Suspender (clima u otro motivo)'),
+                subtitle: const Text('Libera la cancha; se reprograma después'),
+                onTap: () => Navigator.pop(sheetContext, 'suspend'),
+              ),
             ListTile(
-              leading: const Icon(CupertinoIcons.sportscourt),
-              title: const Text('Capturar resultado'),
-              onTap: () => Navigator.pop(sheetContext, 'result'),
+              leading: Icon(
+                CupertinoIcons.xmark_octagon,
+                color: Theme.of(sheetContext).colorScheme.error,
+              ),
+              title: Text(
+                'Cancelar partido',
+                style: TextStyle(
+                  color: Theme.of(sheetContext).colorScheme.error,
+                ),
+              ),
+              subtitle: const Text('Definitivo; no cuenta en la tabla'),
+              onTap: () => Navigator.pop(sheetContext, 'cancel'),
             ),
           ],
         ),
@@ -1512,10 +1551,15 @@ class _SavedMatchTile extends StatelessWidget {
       return;
     }
 
-    if (option == 'schedule') {
-      _openSchedule(context);
-    } else if (option == 'result') {
-      _openResult(context);
+    switch (option) {
+      case 'schedule':
+        _openSchedule(context);
+      case 'result':
+        _openResult(context);
+      case 'suspend':
+        await showMatchStatusSheet(context, match: match, cancel: false);
+      case 'cancel':
+        await showMatchStatusSheet(context, match: match, cancel: true);
     }
   }
 
@@ -1533,9 +1577,18 @@ class _SavedMatchTile extends StatelessWidget {
           fontSize: 18,
         ),
       );
-    } else if (match.status == 'postponed') {
-      subtitle = 'Pospuesto · Toca para reprogramar';
-      trailing = const Icon(Icons.edit_calendar_outlined);
+    } else if (match.isPostponed) {
+      subtitle =
+          '${matchStatusDetail(status: match.status, reason: match.statusReason, note: match.statusNote)}'
+          '\nToca para reprogramar o cancelar';
+      trailing = const Icon(CupertinoIcons.cloud_rain);
+    } else if (match.isCancelled) {
+      subtitle = matchStatusDetail(
+        status: match.status,
+        reason: match.statusReason,
+        note: match.statusNote,
+      );
+      trailing = const Icon(CupertinoIcons.xmark_octagon);
     } else if (match.startsAt == null) {
       subtitle = 'Sin cancha ni horario · Toca para programar';
       trailing = const Icon(Icons.edit_calendar_outlined);
