@@ -659,7 +659,7 @@ service cloud.firestore {
           'updatedByUserId', 'updatedAt'])
         && data.keys().hasOnly(['teamId', 'leagueId', 'tournamentId',
           'format', 'formation', 'slots', 'playerNames',
-          'playerPhotoUrls', 'updatedByUserId', 'updatedAt'])
+          'playerPhotoUrls', 'slotX', 'slotY', 'updatedByUserId', 'updatedAt'])
         && data.teamId == teamId
         && data.leagueId == team.leagueId
         && data.tournamentId == team.tournamentId
@@ -674,6 +674,13 @@ service cloud.firestore {
         && (!('playerPhotoUrls' in data)
           || (data.playerPhotoUrls is list
             && data.playerPhotoUrls.size() == data.slots.size()))
+        // Posición libre de cada casilla (opcional, siempre juntas).
+        && (('slotX' in data) == ('slotY' in data))
+        && (!('slotX' in data)
+          || (data.slotX is list
+            && data.slotY is list
+            && data.slotX.size() == data.slots.size()
+            && data.slotY.size() == data.slots.size()))
         && filled.toSet().size() == filled.size()
         && filled.toSet().hasOnly(team.playerUserIds)
         && data.updatedByUserId == request.auth.uid

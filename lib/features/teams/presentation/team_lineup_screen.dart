@@ -16,7 +16,10 @@ import 'widgets/player_avatar.dart';
 // ================================================================
 //
 // Encargado (canEdit = true):
-//   - Mantén presionado un jugador y arrástralo a una posición.
+//   - Arrastra con el dedo a un jugador (o un lugar libre) para
+//     moverlo a cualquier punto de la cancha.
+//   - Mantén presionado un jugador y arrástralo a otra posición
+//     (se intercambian) o a la banca.
 //   - También puedes tocar una posición para elegir al jugador.
 //   - Un jugador nunca queda en dos posiciones (se intercambian).
 //   - Guardar y exportar como imagen.
@@ -60,6 +63,12 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
   String? _format;
   String? _formationId;
   List<String>? _slots;
+
+  /// Posición de cada casilla en la cancha (0..1).
+  List<LineupSlotPosition>? _positions;
+
+  /// true si el encargado movió alguna casilla con el dedo.
+  bool _customPositions = false;
   bool _dirty = false;
   bool _saving = false;
   bool _exporting = false;
@@ -81,6 +90,28 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
       lineup.slots,
       widget.team.playerUserIds.toSet(),
     );
+    _positions = lineup.positions;
+    _customPositions = lineup.hasCustomPositions;
+  }
+
+  void _moveSlot(int index, double x, double y) {
+    final positions = _positions;
+
+    if (positions == null || _saving) return;
+
+    setState(() {
+      _positions = moveLineupPosition(positions, index, x, y);
+      _customPositions = true;
+      _dirty = true;
+    });
+  }
+
+  void _resetPositions() {
+    setState(() {
+      _positions = formationFor(_format!, _formationId!).positions;
+      _customPositions = false;
+      _dirty = true;
+    });
   }
 
   void _update(List<String> slots) {
@@ -96,6 +127,9 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
     setState(() {
       _formationId = formation.id;
       _slots = resizeSlots(_slots!, formation.slotCount);
+      // La formación nueva da el acomodo inicial.
+      _positions = formation.positions;
+      _customPositions = false;
       _dirty = true;
     });
   }
@@ -116,6 +150,7 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
         slots: _slots!,
         namesById: namesById,
         photosById: photosById,
+        positions: _customPositions ? _positions : null,
       );
 
       if (!mounted) return;
@@ -353,6 +388,7 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
           child: _LineupCard(
             teamName: widget.team.displayName,
             formation: formation,
+            positions: saved.positions,
             names: saved.playerNames,
             photos: saved.playerPhotoUrls,
           ),
@@ -457,8 +493,10 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
           child: _LineupCard(
             teamName: widget.team.displayName,
             formation: formation,
+            positions: _positions ?? formation.positions,
             names: names,
             photos: photos,
+            onMoveSlot: _saving ? null : _moveSlot,
             slotBuilder: (index, child) => _EditableSlot(
               slotIndex: index,
               playerId: slots[index],
@@ -470,7 +508,16 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        if (_customPositions)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _saving ? null : _resetPositions,
+              icon: const Icon(CupertinoIcons.arrow_counterclockwise, size: 18),
+              label: Text('Acomodo de la formación ${formation.id}'),
+            ),
+          ),
+        const SizedBox(height: 10),
         Text(
           'Banca (${bench.length})',
           style: theme.textTheme.titleSmall?.copyWith(
@@ -482,8 +529,9 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
           roster.isEmpty
               ? 'Aún no hay jugadores aceptados en el equipo. Invítalos '
                     'desde Administrar equipo.'
-              : 'Mantén presionado un jugador y arrástralo a su posición, '
-                    'o toca una posición para elegirlo.',
+              : 'Arrastra a un jugador para moverlo a donde quieras. '
+                    'Mantén presionado para intercambiarlo o regresarlo a la '
+                    'banca, o toca una posición para elegirlo.',
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: 10),
@@ -579,19 +627,30 @@ class _LineupCard extends StatelessWidget {
     required this.teamName,
     required this.formation,
     required this.names,
+    this.positions,
     this.photos = const <String>[],
     this.slotBuilder,
+    this.onMoveSlot,
   });
 
   final String teamName;
   final LineupFormation formation;
+
+  /// Posiciones libres; si es null, el acomodo de la formación.
+  final List<LineupSlotPosition>? positions;
   final List<String> names;
   final List<String> photos;
   final _SlotBuilder? slotBuilder;
 
+  /// Mover una casilla con el dedo (x, y entre 0 y 1).
+  final void Function(int index, double x, double y)? onMoveSlot;
+
   @override
   Widget build(BuildContext context) {
-    final positions = formation.positions;
+    final defaults = formation.positions;
+    final positions = this.positions?.length == defaults.length
+        ? this.positions!
+        : defaults;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -653,13 +712,19 @@ class _LineupCard extends StatelessWidget {
                         left: positions[i].x * width - slotWidth / 2,
                         top: positions[i].y * height - 30,
                         width: slotWidth,
-                        child: _wrapSlot(
+                        child: _wrapMove(
                           i,
-                          _SlotView(
-                            name: i < names.length ? names[i] : '',
-                            photoUrl: i < photos.length ? photos[i] : '',
-                            isGoalkeeper: positions[i].isGoalkeeper,
-                            editable: slotBuilder != null,
+                          positions[i],
+                          width,
+                          height,
+                          _wrapSlot(
+                            i,
+                            _SlotView(
+                              name: i < names.length ? names[i] : '',
+                              photoUrl: i < photos.length ? photos[i] : '',
+                              isGoalkeeper: positions[i].isGoalkeeper,
+                              editable: slotBuilder != null,
+                            ),
                           ),
                         ),
                       ),
@@ -679,6 +744,40 @@ class _LineupCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  /// Arrastre libre: un movimiento rápido del dedo mueve la casilla.
+  /// (Mantener presionado sigue siendo intercambiar o mandar a la
+  /// banca, porque ese gesto espera a que el dedo se quede quieto.)
+  Widget _wrapMove(
+    int index,
+    LineupSlotPosition position,
+    double width,
+    double height,
+    Widget child,
+  ) {
+    final move = onMoveSlot;
+
+    if (move == null || width <= 0 || height <= 0) {
+      return child;
+    }
+
+    var x = position.x;
+    var y = position.y;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onPanStart: (_) {
+        x = position.x;
+        y = position.y;
+      },
+      onPanUpdate: (details) {
+        x += details.delta.dx / width;
+        y += details.delta.dy / height;
+        move(index, x, y);
+      },
+      child: child,
     );
   }
 

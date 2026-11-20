@@ -58,6 +58,12 @@ await check(await save('manager',{...lineup(),extra:'x'}),false,'unknown fields 
 await check(await save('manager',lineup()),true,'team manager saves lineup');
 await check(await save('manager',lineup({slots:['p2','p1','p3','p4','p5','p6','p8']})),true,'team manager updates lineup');
 await check(await save('manager',lineup({slots:['','','','','','',''],playerNames:['','','','','','','']})),true,'empty lineup allowed');
+const xs = [0.5,0.3,0.7,0.2,0.5,0.8,0.5], ys = [0.9,0.7,0.7,0.5,0.45,0.5,0.2];
+await check(await save('manager',lineup({slotX:xs,slotY:ys})),true,'free positions saved');
+await check(await save('manager',lineup({slotX:xs})),false,'slotX without slotY rejected');
+await check(await save('manager',lineup({slotX:[0.5],slotY:[0.5]})),false,'positions must match slots');
+await check(await save('manager',lineup({slotX:'x',slotY:'y'})),false,'positions must be lists');
+await check(await save('p1',lineup({updatedByUserId:'p1',slotX:xs,slotY:ys})),false,'player cannot move positions');
 
 await check(await request('/teamLineups/a','p3',null,'GET'),true,'team player reads lineup');
 await check(await request('/teamLineups/a','manager',null,'GET'),true,'team manager reads lineup');

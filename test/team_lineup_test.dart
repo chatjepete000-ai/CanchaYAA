@@ -104,4 +104,70 @@ void main() {
     expect(lineupNameFor('  '), 'Jugador');
     expect(lineupNameFor('x' * 80).length, maxLineupNameLength);
   });
+
+  group('posiciones libres con el dedo', () {
+    final formation = formationFor('football5', '2-2');
+
+    test('sin posiciones guardadas se usa la formación', () {
+      final lineup = TeamLineup.fromMap('t', {
+        'format': 'football5',
+        'formation': '2-2',
+        'slots': ['a', '', '', '', ''],
+      });
+
+      expect(lineup.hasCustomPositions, isFalse);
+      expect(lineup.positions.length, formation.slotCount);
+      expect(lineup.positions.first.isGoalkeeper, isTrue);
+      expect(lineup.positions.first.y, formation.positions.first.y);
+    });
+
+    test('lee las posiciones guardadas y conserva al portero', () {
+      final lineup = TeamLineup.fromMap('t', {
+        'format': 'football5',
+        'formation': '2-2',
+        'slots': ['a', 'b', '', '', ''],
+        'slotX': [0.5, 0.1, 0.9, 0.3, 0.7],
+        'slotY': [0.8, 0.6, 0.6, 0.3, 0.2],
+      });
+
+      expect(lineup.hasCustomPositions, isTrue);
+      expect(lineup.positions[0].isGoalkeeper, isTrue);
+      expect(lineup.positions[0].y, 0.8);
+      expect(lineup.positions[2].x, 0.9);
+    });
+
+    test('posiciones incompletas o inválidas usan la formación', () {
+      final short = TeamLineup.fromMap('t', {
+        'format': 'football5',
+        'formation': '2-2',
+        'slots': ['', '', '', '', ''],
+        'slotX': [0.5],
+        'slotY': [0.5],
+      });
+      final text = TeamLineup.fromMap('t', {
+        'format': 'football5',
+        'formation': '2-2',
+        'slots': ['', '', '', '', ''],
+        'slotX': ['a', 'b', 'c', 'd', 'e'],
+        'slotY': [0.1, 0.2, 0.3, 0.4, 0.5],
+      });
+
+      expect(short.hasCustomPositions, isFalse);
+      expect(text.positions.first.y, formation.positions.first.y);
+    });
+
+    test('mover una casilla no se sale de la cancha', () {
+      final moved = moveLineupPosition(formation.positions, 1, -3, 9);
+
+      expect(moved[1].x, lineupMinX);
+      expect(moved[1].y, lineupMaxY);
+      expect(moved[0], same(formation.positions[0]));
+      expect(moveLineupPosition(formation.positions, 99, 0.5, 0.5).length,
+          formation.slotCount);
+    });
+
+    test('se redondea a 3 decimales para guardar', () {
+      expect(roundLineupCoordinate(0.123456), 0.123);
+    });
+  });
 }

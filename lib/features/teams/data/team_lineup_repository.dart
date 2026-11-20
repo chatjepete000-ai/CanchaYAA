@@ -137,6 +137,7 @@ class TeamLineupRepository {
     required List<String> slots,
     required Map<String, String> namesById,
     Map<String, String> photosById = const <String, String>{},
+    List<LineupSlotPosition>? positions,
   }) async {
     final user = _auth.currentUser;
 
@@ -175,6 +176,15 @@ class TeamLineupRepository {
           for (final id in slots)
             id.isEmpty ? '' : lineupNameFor(namesById[id] ?? ''),
         ],
+        // Posición libre de cada casilla (si el encargado la movió).
+        if (positions != null && positions.length == slots.length) ...{
+          'slotX': [
+            for (final p in positions) roundLineupCoordinate(p.x),
+          ],
+          'slotY': [
+            for (final p in positions) roundLineupCoordinate(p.y),
+          ],
+        },
         // Solo se envía si alguien tiene foto.
         if (photoUrls.any((url) => url.isNotEmpty))
           'playerPhotoUrls': photoUrls,

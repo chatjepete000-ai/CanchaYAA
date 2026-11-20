@@ -15,6 +15,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 //   playerNames   nombre visible de cada posición (para que los
 //                 jugadores vean y exporten la alineación sin
 //                 consultar datos privados).
+//   slotX, slotY  posición libre de cada casilla en la cancha
+//                 (0..1). Opcional: sin ellas se usa el acomodo de
+//                 la formación. El encargado las cambia con el dedo.
 //   playerPhotoUrls  foto de la cara de cada posición ('' = sin
 //                 foto). Opcional: alineaciones anteriores no la
 //                 tienen.
@@ -194,6 +197,84 @@ bool hasNoDuplicatePlayers(List<String> slots) {
 }
 
 // ================================================================
+// POSICIONES LIBRES (el encargado acomoda con el dedo)
+// ================================================================
+
+/// Margen para que la ficha del jugador no se salga de la cancha.
+const double lineupMinX = 0.07;
+const double lineupMaxX = 0.93;
+const double lineupMinY = 0.05;
+const double lineupMaxY = 0.95;
+
+/// Mantiene un punto dentro de la cancha.
+LineupSlotPosition clampLineupPosition(
+  double x,
+  double y, {
+  bool isGoalkeeper = false,
+}) {
+  double fix(double value, double min, double max) =>
+      value.isFinite ? value.clamp(min, max).toDouble() : (min + max) / 2;
+
+  return LineupSlotPosition(
+    x: fix(x, lineupMinX, lineupMaxX),
+    y: fix(y, lineupMinY, lineupMaxY),
+    isGoalkeeper: isGoalkeeper,
+  );
+}
+
+/// Posiciones a mostrar: las libres guardadas si son válidas y
+/// coinciden con las casillas; si no, las de la formación.
+List<LineupSlotPosition> resolveLineupPositions(
+  LineupFormation formation,
+  List<double>? slotX,
+  List<double>? slotY,
+) {
+  final base = formation.positions;
+
+  if (slotX == null ||
+      slotY == null ||
+      slotX.length != base.length ||
+      slotY.length != base.length) {
+    return base;
+  }
+
+  return [
+    for (var i = 0; i < base.length; i++)
+      clampLineupPosition(
+        slotX[i],
+        slotY[i],
+        isGoalkeeper: base[i].isGoalkeeper,
+      ),
+  ];
+}
+
+/// Mueve la casilla [index] a un punto nuevo (ya ajustado a la cancha).
+List<LineupSlotPosition> moveLineupPosition(
+  List<LineupSlotPosition> positions,
+  int index,
+  double x,
+  double y,
+) {
+  if (index < 0 || index >= positions.length) {
+    return List<LineupSlotPosition>.of(positions);
+  }
+
+  final result = List<LineupSlotPosition>.of(positions);
+
+  result[index] = clampLineupPosition(
+    x,
+    y,
+    isGoalkeeper: positions[index].isGoalkeeper,
+  );
+
+  return result;
+}
+
+/// Redondea para guardar (3 decimales bastan en cualquier pantalla).
+double roundLineupCoordinate(double value) =>
+    (value * 1000).roundToDouble() / 1000;
+
+// ================================================================
 // MODELO
 // ================================================================
 
@@ -205,6 +286,8 @@ class TeamLineup {
     required this.slots,
     required this.playerNames,
     this.playerPhotoUrls = const <String>[],
+    this.slotX,
+    this.slotY,
     this.updatedAt,
   });
 
@@ -216,7 +299,21 @@ class TeamLineup {
 
   /// Misma longitud que [slots] cuando viene de Firestore.
   final List<String> playerPhotoUrls;
+
+  /// Posición libre de cada casilla (null = acomodo de la formación).
+  final List<double>? slotX;
+  final List<double>? slotY;
   final DateTime? updatedAt;
+
+  /// Posiciones a dibujar en la cancha.
+  List<LineupSlotPosition> get positions => resolveLineupPositions(
+        formationFor(format, formation),
+        slotX,
+        slotY,
+      );
+
+  bool get hasCustomPositions =>
+      slotX != null && slotX!.length == slots.length;
 
   /// Foto de la posición [index] o '' si no hay.
   String photoAt(int index) =>
@@ -263,6 +360,21 @@ class TeamLineup {
 
     final updatedAt = data['updatedAt'];
 
+    List<double>? readNumbers(dynamic value) {
+      if (value is! List || value.length != formation.slotCount) {
+        return null;
+      }
+
+      final numbers = <double>[];
+
+      for (final item in value) {
+        if (item is! num || !item.toDouble().isFinite) return null;
+        numbers.add(item.toDouble());
+      }
+
+      return numbers;
+    }
+
     return TeamLineup(
       teamId: teamId,
       format: format,
@@ -270,6 +382,8 @@ class TeamLineup {
       slots: readList(data['slots']),
       playerNames: readList(data['playerNames']),
       playerPhotoUrls: readList(data['playerPhotoUrls']),
+      slotX: readNumbers(data['slotX']),
+      slotY: readNumbers(data['slotY']),
       updatedAt: updatedAt is Timestamp ? updatedAt.toDate() : null,
     );
   }
