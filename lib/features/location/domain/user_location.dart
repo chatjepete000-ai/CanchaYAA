@@ -62,8 +62,23 @@ class UserLocation {
   }
 
   /// true si [otherCity] es la misma ciudad (sin acentos ni mayúsculas).
-  bool matchesCity(String otherCity) =>
-      normalizePlaceName(otherCity) == normalizePlaceName(city);
+  ///
+  /// También acepta el nombre corto o el largo de la misma ciudad:
+  /// "Cadereyta" y "Cadereyta Jiménez", "Santiago" y "Santiago, N.L.".
+  bool matchesCity(String otherCity) {
+    final a = normalizePlaceName(otherCity).replaceAll(',', ' ').trim();
+    final b = normalizePlaceName(city).replaceAll(',', ' ').trim();
+
+    if (a.isEmpty || b.isEmpty) return false;
+    if (a == b) return true;
+
+    final shorter = a.length < b.length ? a : b;
+    final longer = a.length < b.length ? b : a;
+
+    // Solo palabras completas al inicio ("san" no coincide con
+    // "san nicolas", porque son 3 letras).
+    return shorter.length >= 4 && longer.startsWith('$shorter ');
+  }
 
   /// Distancia en kilómetros a un punto, o null sin coordenadas.
   double? distanceKmTo(double? latitude, double? longitude) {
@@ -74,10 +89,10 @@ class UserLocation {
     }
 
     return const Distance().as(
-      LengthUnit.Meter,
-      origin,
-      LatLng(latitude, longitude),
-    ) /
+          LengthUnit.Meter,
+          origin,
+          LatLng(latitude, longitude),
+        ) /
         1000;
   }
 

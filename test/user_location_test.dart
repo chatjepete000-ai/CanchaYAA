@@ -62,6 +62,16 @@ void main() {
       expect(location.matchesCity('san nicolas'), isTrue);
       expect(location.matchesCity('  SAN   NICOLÁS '), isTrue);
       expect(location.matchesCity('Linares'), isFalse);
+      expect(
+        const UserLocation(city: 'Cadereyta Jiménez', state: 'Nuevo León')
+            .matchesCity('Cadereyta'),
+        isTrue,
+      );
+      expect(
+        const UserLocation(city: 'San Nicolás de los Garza', state: 'N')
+            .matchesCity('San'),
+        isFalse,
+      );
     });
 
     test('distancia en km y null sin coordenadas', () {
@@ -124,6 +134,27 @@ void main() {
       ]);
       expect(results.first.latitude, 24.8597);
       expect(results.last.hasCoordinates, isFalse);
+    });
+
+    test('prefiere el pueblo sobre el centro del municipio y omite estados',
+        () {
+      // Orden real de Nominatim al buscar "Linares": primero el
+      // municipio (centro a ~16 km del pueblo), luego el pueblo.
+      final results = parseNominatimResults('''
+[
+  {"lat": "24.8530", "lon": "-99.4103", "addresstype": "county",
+    "name": "Linares", "address": {"state": "Nuevo León", "country_code": "mx"}},
+  {"lat": "24.8595", "lon": "-99.5683", "addresstype": "town",
+    "name": "Linares", "address": {"state": "Nuevo León", "country_code": "mx"}},
+  {"lat": "26.2384", "lon": "-99.8873", "addresstype": "state",
+    "name": "Nuevo León", "address": {"state": "Nuevo León", "country_code": "mx"}},
+  {"lat": "22.2445", "lon": "-102.018", "addresstype": "village",
+    "name": "Linares", "address": {"state": "Zacatecas", "country_code": "mx"}}
+]
+''');
+
+      expect(results.map((r) => r.label), ['Linares, N.L.', 'Linares, Zac.']);
+      expect(results.first.longitude, closeTo(-99.5683, 0.0001));
     });
 
     test('respuesta inválida no rompe la app', () {

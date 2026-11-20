@@ -29,9 +29,17 @@ class _CourtsScreenState extends State<CourtsScreen> {
   // Canchas registradas a esta distancia se consideran "cerca".
   static const double nearbyRadiusKm = 30;
 
-  static const Color _green = Color(0xFF0B8F4D);
+  static const Color _green = Color(0xFF0E7A3E);
   static const Color _greenDark = Color(0xFF0B3D25);
-  static const Color _suggested = Color(0xFFE0861A);
+
+  /// El mapa siempre es claro: dorado oscuro sobre blanco.
+  static const Color _mapGold = Color(0xFF8A6A00);
+
+  /// Dorado de las sugeridas: más oscuro en modo claro para que el
+  /// texto tenga buen contraste.
+  Color get _suggested => Theme.of(context).brightness == Brightness.dark
+      ? const Color(0xFFE0B341)
+      : const Color(0xFF8A6A00);
 
   final _map = MapController();
   late final _repository = CourtRepository();
@@ -44,6 +52,8 @@ class _CourtsScreenState extends State<CourtsScreen> {
   bool _importing = false;
 
   List<OsmPitch> _osmPitches = const [];
+  int? _osmRadiusKm;
+  _CourtsTab _tab = _CourtsTab.list;
   bool _osmLoading = false;
   String? _osmError;
   int _osmRequest = 0;
@@ -67,6 +77,8 @@ class _CourtsScreenState extends State<CourtsScreen> {
 
     setState(() {
       _selected = null;
+      _osmPitches = const [];
+      _osmRadiusKm = null;
     });
 
     // El mapa ya está creado: moverlo a la nueva ciudad.
@@ -87,6 +99,7 @@ class _CourtsScreenState extends State<CourtsScreen> {
     if (point == null || Firebase.apps.isEmpty) {
       setState(() {
         _osmPitches = const [];
+        _osmRadiusKm = null;
         _osmLoading = false;
         _osmError = null;
       });
@@ -99,15 +112,13 @@ class _CourtsScreenState extends State<CourtsScreen> {
     });
 
     try {
-      final pitches = await _osm.pitchesAround(
-        point.latitude,
-        point.longitude,
-      );
+      final result = await _osm.search(point.latitude, point.longitude);
 
       if (!mounted || request != _osmRequest) return;
 
       setState(() {
-        _osmPitches = pitches;
+        _osmPitches = result.pitches;
+        _osmRadiusKm = result.radiusKm;
         _osmLoading = false;
       });
     } on OsmPitchException catch (error) {
@@ -115,6 +126,7 @@ class _CourtsScreenState extends State<CourtsScreen> {
 
       setState(() {
         _osmPitches = const [];
+        _osmRadiusKm = null;
         _osmLoading = false;
         _osmError = error.message;
       });
@@ -278,7 +290,8 @@ class _CourtsScreenState extends State<CourtsScreen> {
             profile.data?.status == AccountStatus.active;
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Explorar canchas'),
+            // El título grande va en el encabezado (plantilla "Limpio").
+            scrolledUnderElevation: 0,
             actions: [
               if (admin)
                 IconButton(
@@ -319,56 +332,60 @@ class _CourtsScreenState extends State<CourtsScreen> {
 
               final query = _query.toLowerCase().trim();
               final all = snapshot.data!.where((c) => c.active).toList();
-              final filtered = all
-                  .where(
-                    (c) =>
-                        (_sport == 'Todas' || c.sport == _sport) &&
-                        '${c.name} ${c.address} ${c.city}'
-                            .toLowerCase()
-                            .contains(query),
-                  )
-                  .toList()
-                ..sort(_byProximity);
+              final filtered =
+                  all
+                      .where(
+                        (c) =>
+                            (_sport == 'Todas' || c.sport == _sport) &&
+                            '${c.name} ${c.address} ${c.city}'
+                                .toLowerCase()
+                                .contains(query),
+                      )
+                      .toList()
+                    ..sort(_byProximity);
 
               final nearby = filtered.where(_isNearby).toList();
-              final elsewhere =
-                  filtered.where((c) => !_isNearby(c)).toList();
+              final elsewhere = filtered.where((c) => !_isNearby(c)).toList();
 
               // Las sugeridas son de fútbol sin tipo exacto: solo con
               // "Todas". Se omiten las que ya están registradas.
-              final suggested = _sport != 'Todas'
-                  ? const <OsmPitch>[]
-                  : _osmPitches
-                      .where(
-                        (pitch) =>
-                            pitch.displayName.toLowerCase().contains(query) &&
-                            !all.any(
-                              (court) =>
-                                  court.hasCoordinates &&
-                                  const Distance().as(
-                                        LengthUnit.Meter,
-                                        LatLng(
-                                          court.latitude!,
-                                          court.longitude!,
-                                        ),
-                                        LatLng(
-                                          pitch.latitude,
-                                          pitch.longitude,
-                                        ),
-                                      ) <
-                                      80,
-                            ),
-                      )
-                      .toList()
+              final suggested =
+                  _sport != 'Todas'
+                        ? const <OsmPitch>[]
+                        : _osmPitches
+                              .where(
+                                (pitch) =>
+                                    pitch.displayName.toLowerCase().contains(
+                                      query,
+                                    ) &&
+                                    !all.any(
+                                      (court) =>
+                                          court.hasCoordinates &&
+                                          const Distance().as(
+                                                LengthUnit.Meter,
+                                                LatLng(
+                                                  court.latitude!,
+                                                  court.longitude!,
+                                                ),
+                                                LatLng(
+                                                  pitch.latitude,
+                                                  pitch.longitude,
+                                                ),
+                                              ) <
+                                              80,
+                                    ),
+                              )
+                              .toList()
                     ..sort(
-                      (a, b) => (_location.distanceKmTo(
-                                a.latitude,
-                                a.longitude,
-                              ) ??
-                              0)
-                          .compareTo(
-                        _location.distanceKmTo(b.latitude, b.longitude) ?? 0,
-                      ),
+                      (a, b) =>
+                          (_location.distanceKmTo(a.latitude, a.longitude) ?? 0)
+                              .compareTo(
+                                _location.distanceKmTo(
+                                      b.latitude,
+                                      b.longitude,
+                                    ) ??
+                                    0,
+                              ),
                     );
 
               final map = _buildMap(
@@ -377,72 +394,75 @@ class _CourtsScreenState extends State<CourtsScreen> {
                 admin: admin,
               );
 
-              final listChildren = <Widget>[
-                _buildSectionTitle(
-                  icon: Icons.verified_outlined,
-                  title: 'En CanchaYA cerca de ${_location.city}',
-                  count: nearby.length,
-                  color: _green,
-                ),
+              final listTab = <Widget>[
                 if (nearby.isEmpty)
                   _buildNoNearby(all: all, admin: admin)
                 else
                   for (final court in nearby)
                     _buildCourtCard(court, admin: admin, profile: profile.data),
-                const SizedBox(height: 18),
-                _buildSectionTitle(
-                  icon: Icons.travel_explore,
-                  title: 'Canchas sugeridas en el mapa',
-                  count: suggested.length,
-                  color: _suggested,
-                ),
-                ..._buildSuggestedList(suggested, admin: admin),
                 if (elsewhere.isNotEmpty) ...[
-                  const SizedBox(height: 18),
-                  _buildElsewhere(elsewhere, admin: admin, profile: profile.data),
+                  const SizedBox(height: 12),
+                  _buildElsewhere(
+                    elsewhere,
+                    admin: admin,
+                    profile: profile.data,
+                  ),
                 ],
+                const SizedBox(height: 12),
+                _buildHelpCard(admin: admin),
               ];
+
+              final suggestedTab = _buildSuggestedList(suggested, admin: admin);
 
               return LayoutBuilder(
                 builder: (context, constraints) {
-                  final header = <Widget>[
-                    _buildHero(
-                      nearbyCount: nearby.length,
-                      suggestedCount: suggested.length,
-                    ),
-                    const SizedBox(height: 14),
-                    _buildFilters(),
-                    const SizedBox(height: 14),
-                  ];
+                  final wide = constraints.maxWidth >= 850;
 
-                  if (constraints.maxWidth >= 850) {
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(
-                            width: 400,
-                            child: ListView(
-                              children: [...header, ...listChildren],
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(child: map),
-                        ],
-                      ),
+                  final header = _buildHeader(
+                    suggestedCount: suggested.length,
+                    showMapTab: !wide,
+                  );
+
+                  Widget content;
+
+                  if (_tab == _CourtsTab.map && !wide) {
+                    content = Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                      child: map,
+                    );
+                  } else {
+                    content = ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+                      children: _tab == _CourtsTab.suggested
+                          ? suggestedTab
+                          : listTab,
                     );
                   }
 
-                  return ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+                  final column = Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      ...header,
-                      SizedBox(height: 270, child: map),
-                      const SizedBox(height: 18),
-                      ...listChildren,
+                      header,
+                      Expanded(child: content),
                     ],
                   );
+
+                  if (wide) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SizedBox(width: 420, child: column),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(0, 16, 16, 16),
+                            child: map,
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+
+                  return column;
                 },
               );
             },
@@ -453,117 +473,161 @@ class _CourtsScreenState extends State<CourtsScreen> {
   }
 
   // ==============================================================
-  // ENCABEZADO
+  // ENCABEZADO (plantilla "Limpio")
   // ==============================================================
 
-  Widget _buildHero({
-    required int nearbyCount,
-    required int suggestedCount,
-  }) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [_greenDark, _green],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: _green.withValues(alpha: 0.25),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+  Widget _buildHeader({required int suggestedCount, required bool showMapTab}) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    if (!showMapTab && _tab == _CourtsTab.map) {
+      _tab = _CourtsTab.list;
+    }
+
+    final radius = _osmRadiusKm;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(
-                  Icons.location_on,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          Text(
+            'Encuentra tu cancha',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.5,
+              height: 1.1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Material(
+            color: Colors.transparent,
+            shape: StadiumBorder(
+              side: BorderSide(color: colors.outlineVariant, width: 1.5),
+            ),
+            child: InkWell(
+              customBorder: const StadiumBorder(),
+              onTap: _changeCity,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      'Canchas cerca de',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        fontWeight: FontWeight.w600,
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 18,
+                      color: _green,
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        _location.state.trim().isEmpty
+                            ? _location.city
+                            : '${_location.city}, ${_location.state}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
-                    Text(
-                      _location.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.4,
-                      ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 20,
+                      color: colors.onSurfaceVariant,
                     ),
                   ],
                 ),
               ),
-              Material(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(100),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(100),
-                  onTap: _changeCity,
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  onChanged: (v) => setState(() => _query = v),
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    hintText: 'Nombre, colonia o dirección',
+                    prefixIcon: const Icon(Icons.search),
+                    filled: true,
+                    fillColor: colors.surfaceContainerHighest.withValues(
+                      alpha: 0.6,
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.swap_horiz, size: 18, color: _green),
-                        SizedBox(width: 4),
-                        Text(
-                          'Cambiar',
-                          style: TextStyle(
-                            color: _green,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 52,
+                height: 52,
+                child: Material(
+                  color: colors.onSurface,
+                  borderRadius: BorderRadius.circular(16),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: _openFilters,
+                    child: Tooltip(
+                      message: 'Filtrar por tipo de cancha',
+                      child: Icon(Icons.tune_rounded, color: colors.surface),
                     ),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          Row(
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: colors.outlineVariant, width: 1.5),
+              ),
+            ),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _TabLabel(
+                    label: 'Lista',
+                    selected: _tab == _CourtsTab.list,
+                    onTap: () => setState(() => _tab = _CourtsTab.list),
+                  ),
+                  if (showMapTab)
+                    _TabLabel(
+                      label: 'Mapa',
+                      selected: _tab == _CourtsTab.map,
+                      onTap: () => setState(() => _tab = _CourtsTab.map),
+                    ),
+                  _TabLabel(
+                    label: _osmLoading
+                        ? 'Sugeridas (…)'
+                        : 'Sugeridas ($suggestedCount)',
+                    selected: _tab == _CourtsTab.suggested,
+                    onTap: () => setState(() => _tab = _CourtsTab.suggested),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
             children: [
-              _HeroStat(
-                value: '$nearbyCount',
-                label: 'en CanchaYA',
-                icon: Icons.verified,
+              _FilterTag(
+                label: 'Hasta ${radius ?? nearbyRadiusKm.round()} km',
+                highlighted: true,
               ),
-              const SizedBox(width: 10),
-              _HeroStat(
-                value: _osmLoading ? '…' : '$suggestedCount',
-                label: 'sugeridas',
-                icon: Icons.travel_explore,
-              ),
+              if (_sport != 'Todas')
+                _FilterTag(
+                  label: _sport,
+                  onRemove: () => setState(() => _sport = 'Todas'),
+                ),
             ],
           ),
         ],
@@ -571,58 +635,90 @@ class _CourtsScreenState extends State<CourtsScreen> {
     );
   }
 
-  Widget _buildFilters() {
-    const sports = <(String, IconData)>[
-      ('Todas', Icons.grid_view_rounded),
-      ('Fútbol 5', Icons.sports_soccer),
-      ('Fútbol 7', Icons.sports_soccer),
-      ('Fútbol 11', Icons.stadium_outlined),
-      ('Usos múltiples', Icons.sports_basketball_outlined),
+  Future<void> _openFilters() async {
+    const sports = <String>[
+      'Todas',
+      'Fútbol 5',
+      'Fútbol 7',
+      'Fútbol 11',
+      'Usos múltiples',
     ];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextField(
-          onChanged: (v) => setState(() => _query = v),
-          decoration: InputDecoration(
-            hintText: 'Buscar cancha, colonia o ciudad',
-            prefixIcon: const Icon(Icons.search),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (final (sport, icon) in sports)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    avatar: Icon(
-                      icon,
-                      size: 18,
-                      color: _sport == sport ? Colors.white : _green,
+              Text(
+                'Tipo de cancha',
+                style: Theme.of(sheetContext).textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final sport in sports)
+                    ChoiceChip(
+                      label: Text(sport),
+                      selected: _sport == sport,
+                      showCheckmark: false,
+                      selectedColor: _green,
+                      labelStyle: TextStyle(
+                        color: _sport == sport ? Colors.white : null,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      onSelected: (_) => Navigator.pop(sheetContext, sport),
                     ),
-                    showCheckmark: false,
-                    label: Text(sport),
-                    selected: _sport == sport,
-                    selectedColor: _green,
-                    labelStyle: TextStyle(
-                      color: _sport == sport ? Colors.white : null,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    shape: const StadiumBorder(),
-                    onSelected: (_) => setState(() => _sport = sport),
-                  ),
-                ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Las sugeridas de OpenStreetMap solo se muestran con "Todas", '
+                'porque no indican el tipo exacto.',
+                style: Theme.of(sheetContext).textTheme.bodySmall,
+              ),
             ],
           ),
         ),
-      ],
+      ),
+    );
+
+    if (picked != null && mounted) {
+      setState(() => _sport = picked);
+    }
+  }
+
+  Widget _buildHelpCard({required bool admin}) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline_rounded, color: _green),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              admin
+                  ? '¿Falta una cancha? Regístrala o revisa la pestaña Sugeridas.'
+                  : '¿No ves la tuya? Revisa Sugeridas o pide al administrador '
+                        'que la registre.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -654,12 +750,12 @@ class _CourtsScreenState extends State<CourtsScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
-                        border: Border.all(color: _suggested, width: 2.5),
+                        border: Border.all(color: _mapGold, width: 2.5),
                       ),
                       child: const Icon(
                         Icons.sports_soccer,
                         size: 18,
-                        color: _suggested,
+                        color: _mapGold,
                       ),
                     ),
                   ),
@@ -711,21 +807,29 @@ class _CourtsScreenState extends State<CourtsScreen> {
                   BoxShadow(color: Colors.black12, blurRadius: 6),
                 ],
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _LegendDot(color: _green),
-                  SizedBox(width: 4),
-                  Text(
+                  const _LegendDot(color: _green),
+                  const SizedBox(width: 4),
+                  const Text(
                     'CanchaYA',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF17221C),
+                    ),
                   ),
-                  SizedBox(width: 10),
-                  _LegendDot(color: _suggested),
-                  SizedBox(width: 4),
-                  Text(
+                  const SizedBox(width: 10),
+                  const _LegendDot(color: _mapGold),
+                  const SizedBox(width: 4),
+                  const Text(
                     'Sugeridas',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF17221C),
+                    ),
                   ),
                 ],
               ),
@@ -779,43 +883,6 @@ class _CourtsScreenState extends State<CourtsScreen> {
   // LISTAS
   // ==============================================================
 
-  Widget _buildSectionTitle({
-    required IconData icon,
-    required String title,
-    required int count,
-    required Color color,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              title,
-              maxLines: 2,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(100),
-            ),
-            child: Text(
-              '$count',
-              style: TextStyle(color: color, fontWeight: FontWeight.w900),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildNoNearby({required List<Court> all, required bool admin}) {
     return _EmptyCard(
       icon: Icons.add_location_alt_outlined,
@@ -843,8 +910,7 @@ class _CourtsScreenState extends State<CourtsScreen> {
         _EmptyCard(
           icon: Icons.map_outlined,
           title: 'Sin coordenadas para esta ciudad',
-          message:
-              'Elige tu ciudad con el buscador para ver canchas sugeridas del mapa.',
+          message: 'Elige tu ciudad con el buscador para ver canchas sugeridas del mapa.',
         ),
       ];
     }
@@ -879,7 +945,8 @@ class _CourtsScreenState extends State<CourtsScreen> {
           icon: Icons.travel_explore,
           title: 'Sin canchas sugeridas',
           message:
-              'OpenStreetMap no tiene canchas de fútbol registradas en esta zona.',
+              'OpenStreetMap no tiene canchas de fútbol registradas a menos '
+              'de 50 km. Prueba con la ciudad más cercana.',
         ),
       ];
     }
@@ -947,7 +1014,8 @@ class _CourtsScreenState extends State<CourtsScreen> {
     required bool admin,
     required UserProfile? profile,
   }) {
-    final canEdit = admin &&
+    final canEdit =
+        admin &&
         (court.createdBy == profile?.uid || profile?.isPlatformAdmin == true);
 
     return _CourtCard(
@@ -993,57 +1061,6 @@ class _CourtsScreenState extends State<CourtsScreen> {
 // COMPONENTES VISUALES
 // ================================================================
 
-class _HeroStat extends StatelessWidget {
-  const _HeroStat({
-    required this.value,
-    required this.label,
-    required this.icon,
-  });
-
-  final String value;
-  final String label;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.13),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: Colors.white, size: 18),
-            const SizedBox(width: 8),
-            Text(
-              value,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.85),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _LegendDot extends StatelessWidget {
   const _LegendDot({required this.color});
 
@@ -1051,12 +1068,118 @@ class _LegendDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: 10,
-        height: 10,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      );
+    width: 10,
+    height: 10,
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  );
 }
 
+enum _CourtsTab { list, map, suggested }
+
+class _TabLabel extends StatelessWidget {
+  const _TabLabel({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 44),
+        margin: const EdgeInsets.only(right: 22),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: selected ? _CourtsPalette.green : Colors.transparent,
+              width: 3,
+            ),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+            color: selected ? colors.onSurface : colors.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterTag extends StatelessWidget {
+  const _FilterTag({
+    required this.label,
+    this.highlighted = false,
+    this.onRemove,
+  });
+
+  final String label;
+  final bool highlighted;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+
+    final background = highlighted
+        ? _CourtsPalette.green.withValues(alpha: dark ? 0.28 : 0.1)
+        : colors.surfaceContainerHighest.withValues(alpha: 0.7);
+
+    final foreground = highlighted
+        ? (dark ? const Color(0xFF8CE0AE) : const Color(0xFF0E5A30))
+        : colors.onSurface;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(12, 6, onRemove == null ? 12 : 6, 6),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: foreground,
+            ),
+          ),
+          if (onRemove != null)
+            InkWell(
+              onTap: onRemove,
+              customBorder: const CircleBorder(),
+              child: Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Icon(Icons.close_rounded, size: 16, color: foreground),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CourtsPalette {
+  static const Color green = Color(0xFF0E7A3E);
+}
+
+/// Fila de cancha: distancia a la izquierda, nombre y etiquetas al
+/// centro y botón redondo de "Cómo llegar" a la derecha.
 class _CourtCard extends StatelessWidget {
   const _CourtCard({
     required this.title,
@@ -1086,154 +1209,150 @@ class _CourtCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Material(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(22),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(22),
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: selected ? color : colors.outlineVariant,
-                width: selected ? 2 : 1,
+    // "1.2 km" -> "1.2" arriba y "km" abajo.
+    final parts = (distance ?? '').split(' ');
+    final number = parts.isNotEmpty ? parts.first : '';
+    final unit = parts.length > 1 ? parts[1] : '';
+
+    return Material(
+      color: selected
+          ? color.withValues(alpha: dark ? 0.16 : 0.06)
+          : Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: colors.outlineVariant.withValues(alpha: 0.6),
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 12,
-                  offset: const Offset(0, 5),
-                ),
-              ],
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [color, color.withValues(alpha: 0.7)],
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.sports_soccer,
-                    color: Colors.white,
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 52,
+                child: distance == null
+                    ? Icon(
+                        Icons.location_on_outlined,
+                        color: colors.onSurfaceVariant,
+                      )
+                    : Column(
                         children: [
-                          Expanded(
-                            child: Text(
-                              title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 16,
-                                height: 1.2,
-                              ),
+                          Text(
+                            number,
+                            maxLines: 1,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: color,
                             ),
                           ),
-                          if (distance != null) ...[
-                            const SizedBox(width: 8),
-                            Container(
+                          Text(
+                            unit,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                    if (detail != null && detail!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        detail!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        _Badge(label: badge ?? 'CanchaYA', color: color),
+                        if (onEdit != null)
+                          InkWell(
+                            onTap: onEdit,
+                            borderRadius: BorderRadius.circular(6),
+                            child: Padding(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: color.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(100),
+                                horizontal: 6,
+                                vertical: 2,
                               ),
                               child: Text(
-                                distance!,
+                                'Editar',
                                 style: TextStyle(
-                                  color: color,
-                                  fontWeight: FontWeight.w900,
                                   fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: colors.onSurfaceVariant,
+                                  decoration: TextDecoration.underline,
                                 ),
                               ),
                             ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          if (badge != null) ...[
-                            Text(
-                              badge!,
-                              style: TextStyle(
-                                color: color,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 12,
-                              ),
-                            ),
-                            const Text(' · '),
-                          ],
-                          Expanded(
-                            child: Text(
-                              subtitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
                           ),
-                        ],
-                      ),
-                      if (detail != null && detail!.trim().isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          detail!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall,
-                        ),
                       ],
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          _SmallAction(
-                            icon: Icons.directions,
-                            label: 'Cómo llegar',
-                            color: color,
-                            onTap: onDirections,
-                          ),
-                          if (onEdit != null) ...[
-                            const SizedBox(width: 8),
-                            _SmallAction(
-                              icon: Icons.edit_outlined,
-                              label: 'Editar',
-                              color: colors.onSurfaceVariant,
-                              onTap: onEdit!,
-                            ),
-                          ],
-                        ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 44,
+                height: 44,
+                child: Material(
+                  color: Colors.transparent,
+                  shape: CircleBorder(
+                    side: BorderSide(color: colors.outlineVariant, width: 1.5),
+                  ),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: onDirections,
+                    child: Tooltip(
+                      message: 'Cómo llegar',
+                      child: Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 20,
+                        color: colors.onSurface,
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1241,44 +1360,28 @@ class _CourtCard extends StatelessWidget {
   }
 }
 
-class _SmallAction extends StatelessWidget {
-  const _SmallAction({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
+class _Badge extends StatelessWidget {
+  const _Badge({required this.label, required this.color});
 
-  final IconData icon;
   final String label;
   final Color color;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(100),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(100),
-          border: Border.all(color: color.withValues(alpha: 0.4)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 15, color: color),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w800,
-                fontSize: 12,
-              ),
-            ),
-          ],
+    final dark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: dark ? 0.24 : 0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          color: dark ? Color.lerp(color, Colors.white, 0.35) : color,
         ),
       ),
     );
@@ -1321,10 +1424,7 @@ class _EmptyCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(message, textAlign: TextAlign.center),
-          if (action != null) ...[
-            const SizedBox(height: 10),
-            action!,
-          ],
+          if (action != null) ...[const SizedBox(height: 10), action!],
         ],
       ),
     );
@@ -1366,9 +1466,7 @@ class _SuggestedPitchSheet extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               pitch.displayName,
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
+              style: Theme.of(context).textTheme.headlineSmall
                   ?.copyWith(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 8),

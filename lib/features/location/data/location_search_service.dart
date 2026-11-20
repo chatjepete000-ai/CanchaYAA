@@ -31,9 +31,8 @@ class LocationSearchException implements Exception {
 }
 
 class LocationSearchService {
-  LocationSearchService({
-    http.Client? client,
-  }) : _client = client ?? http.Client();
+  LocationSearchService({http.Client? client})
+    : _client = client ?? http.Client();
 
   static const String _endpoint = String.fromEnvironment(
     'GEOCODER_URL',
@@ -111,6 +110,40 @@ class LocationSearchService {
   }
 }
 
+/// Prioridad de cada tipo de lugar al haber varios con el mismo nombre
+/// en el mismo estado. Nominatim suele devolver primero el MUNICIPIO,
+/// cuyo centro geográfico puede estar a 15 km o más del pueblo (en el
+/// campo), y la búsqueda de canchas alrededor de ese punto no
+/// encontraba nada. Se prefiere la localidad donde vive la gente.
+int _placeRank(String addressType) {
+  switch (addressType) {
+    case 'city':
+    case 'town':
+      return 0;
+    case 'village':
+    case 'suburb':
+    case 'borough':
+    case 'quarter':
+    case 'neighbourhood':
+    case 'hamlet':
+      return 1;
+    case 'municipality':
+    case 'county':
+      return 2;
+    default:
+      return 1;
+  }
+}
+
+/// Tipos que no sirven para buscar canchas cercanas: su centro está
+/// lejos de cualquier ciudad.
+const Set<String> _tooLargePlaceTypes = {
+  'state',
+  'region',
+  'country',
+  'state_district',
+};
+
 /// Convierte la respuesta JSON de Nominatim en ciudades sin repetir.
 ///
 /// Se separa para poder probarla sin conexión.
@@ -127,8 +160,10 @@ List<UserLocation> parseNominatimResults(String body) {
     return const <UserLocation>[];
   }
 
-  final results = <UserLocation>[];
-  final seen = <String>{};
+  // Clave (ciudad|estado) -> mejor resultado y su prioridad. Se
+  // conserva el orden en que Nominatim mostró cada lugar.
+  final order = <String>[];
+  final best = <String, ({UserLocation location, int rank})>{};
 
   for (final item in decoded) {
     if (item is! Map) continue;
@@ -139,6 +174,10 @@ List<UserLocation> parseNominatimResults(String body) {
     final countryCode = (addressMap['country_code'] as String?) ?? 'mx';
 
     if (countryCode.toLowerCase() != 'mx') continue;
+
+    final addressType = ((item['addresstype'] as String?) ?? '').trim();
+
+    if (_tooLargePlaceTypes.contains(addressType)) continue;
 
     String pick(List<String> keys) {
       for (final key in keys) {
@@ -173,10 +212,20 @@ List<UserLocation> parseNominatimResults(String body) {
     final key =
         '${normalizePlaceName(location.city)}|${normalizePlaceName(location.state)}';
 
-    if (seen.add(key)) {
-      results.add(location);
+    var rank = _placeRank(addressType);
+
+    // Sin coordenadas no sirve para medir distancias.
+    if (!location.hasCoordinates) rank += 10;
+
+    final previous = best[key];
+
+    if (previous == null) {
+      order.add(key);
+      best[key] = (location: location, rank: rank);
+    } else if (rank < previous.rank) {
+      best[key] = (location: location, rank: rank);
     }
   }
 
-  return results;
+  return [for (final key in order) best[key]!.location];
 }

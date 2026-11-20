@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cancha_ya/features/courts/data/osm_pitch_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -45,26 +47,77 @@ void main() {
     expect(pitch.directionsUri.queryParameters['destination'], '26.1,-98.3');
   });
 
-  test('consulta Overpass con radio y guarda en memoria', () async {
-    var calls = 0;
-    late String body;
+  test('consulta Overpass, amplía el radio si hay pocas y guarda en memoria',
+      () async {
+    final radii = <String>[];
 
     final service = OsmPitchService(
+      endpoints: const ['https://overpass.test/api/interpreter'],
       client: MockClient((request) async {
-        calls++;
-        body = Uri.decodeQueryComponent(request.body);
+        final body = Uri.decodeQueryComponent(request.body);
+        radii.add(RegExp(r'around:(\d+),').firstMatch(body)!.group(1)!);
+        expect(body, contains('"leisure"="pitch"'));
         return http.Response(_overpassSample, 200);
       }),
     );
 
-    final first = await service.pitchesAround(26.0801, -98.2901);
-    final second = await service.pitchesAround(26.0799, -98.2899);
+    final first = await service.search(26.0801, -98.2901);
+    final second = await service.search(26.0799, -98.2899);
 
-    expect(first.length, 2);
+    // La muestra tiene 2 canchas (< 3): se prueban 10, 25 y 50 km.
+    expect(radii, ['10000', '25000', '50000']);
+    expect(first.pitches.length, 2);
+    expect(first.radiusKm, 50);
     expect(second, same(first));
-    expect(calls, 1);
-    expect(body, contains('around:${OsmPitchService.radiusMeters},26.0801,-98.2901'));
-    expect(body, contains('"leisure"="pitch"'));
+  });
+
+  test('con suficientes canchas no amplía el radio', () async {
+    final radii = <String>[];
+    final many = jsonEncode({
+      'elements': [
+        for (var i = 0; i < 4; i++)
+          {'type': 'node', 'id': i, 'lat': 26.0 + i / 100, 'lon': -98.0},
+      ],
+    });
+
+    final service = OsmPitchService(
+      endpoints: const ['https://overpass.test/api/interpreter'],
+      client: MockClient((request) async {
+        final body = Uri.decodeQueryComponent(request.body);
+        radii.add(RegExp(r'around:(\d+),').firstMatch(body)!.group(1)!);
+        return http.Response(many, 200);
+      }),
+    );
+
+    final result = await service.search(26.0, -98.0);
+
+    expect(radii, ['${OsmPitchService.radiusMeters}']);
+    expect(result.radiusKm, 10);
+    // Ordenadas de la más cercana a la más lejana.
+    expect(result.pitches.first.id, 'node/0');
+  });
+
+  test('si un servidor está ocupado usa el siguiente', () async {
+    final hosts = <String>[];
+
+    final service = OsmPitchService(
+      endpoints: const [
+        'https://ocupado.test/api/interpreter',
+        'https://respaldo.test/api/interpreter',
+      ],
+      client: MockClient((request) async {
+        hosts.add(request.url.host);
+        return request.url.host == 'ocupado.test'
+            ? http.Response('', 429)
+            : http.Response(_overpassSample, 200);
+      }),
+    );
+
+    final result = await service.pitchesAround(26.0, -98.0);
+
+    expect(result.length, 2);
+    expect(hosts.first, 'ocupado.test');
+    expect(hosts, contains('respaldo.test'));
   });
 
   test('errores con mensaje claro', () async {

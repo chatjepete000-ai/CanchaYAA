@@ -63,9 +63,9 @@ class OsmPitch {
   }
 
   Uri get directionsUri => Uri.https('www.google.com', '/maps/dir/', {
-        'api': '1',
-        'destination': '$latitude,$longitude',
-      });
+    'api': '1',
+    'destination': '$latitude,$longitude',
+  });
 }
 
 class OsmPitchException implements Exception {
@@ -77,26 +77,58 @@ class OsmPitchException implements Exception {
   String toString() => message;
 }
 
+/// Resultado de una búsqueda: las canchas y el radio que se usó.
+class OsmPitchSearch {
+  const OsmPitchSearch({required this.pitches, required this.radiusMeters});
+
+  final List<OsmPitch> pitches;
+  final int radiusMeters;
+
+  int get radiusKm => (radiusMeters / 1000).round();
+}
+
 class OsmPitchService {
-  OsmPitchService({
-    http.Client? client,
-  }) : _client = client ?? http.Client();
+  OsmPitchService({http.Client? client, List<String>? endpoints})
+    : _client = client ?? http.Client(),
+      _endpoints = endpoints ?? defaultEndpoints;
 
-  static const String _endpoint = String.fromEnvironment(
-    'OVERPASS_URL',
-    defaultValue: 'https://overpass-api.de/api/interpreter',
-  );
+  static const String _customEndpoint = String.fromEnvironment('OVERPASS_URL');
 
-  /// Radio de búsqueda alrededor de la ciudad.
+  /// Servidores públicos de Overpass. Si el primero está ocupado
+  /// (429/504) o no responde, se intenta con el siguiente.
+  static List<String> get defaultEndpoints => [
+    if (_customEndpoint.isNotEmpty) _customEndpoint,
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter',
+  ];
+
+  /// Primer radio de búsqueda alrededor de la ciudad.
   static const int radiusMeters = 10000;
+
+  /// Si hay pocas canchas, se amplía el radio en estos pasos (pueblos
+  /// pequeños o centros de municipio alejados de la cabecera).
+  static const List<int> radiusStepsMeters = [10000, 25000, 50000];
+
+  /// Con al menos estas canchas ya no se amplía el radio.
+  static const int enoughResults = 3;
 
   /// Máximo de canchas sugeridas.
   static const int maxResults = 60;
 
   final http.Client _client;
-  final Map<String, List<OsmPitch>> _cache = {};
+  final List<String> _endpoints;
+  final Map<String, OsmPitchSearch> _cache = {};
 
-  Future<List<OsmPitch>> pitchesAround(double latitude, double longitude) async {
+  Future<List<OsmPitch>> pitchesAround(
+    double latitude,
+    double longitude,
+  ) async {
+    return (await search(latitude, longitude)).pitches;
+  }
+
+  /// Busca alrededor del punto y amplía el radio si hay muy pocas.
+  Future<OsmPitchSearch> search(double latitude, double longitude) async {
     // Se redondea para reutilizar resultados de la misma ciudad.
     final key =
         '${latitude.toStringAsFixed(2)},${longitude.toStringAsFixed(2)}';
@@ -106,49 +138,103 @@ class OsmPitchService {
       return cached;
     }
 
-    final query = '''
+    OsmPitchSearch? found;
+
+    for (final radius in radiusStepsMeters) {
+      List<OsmPitch> pitches;
+
+      try {
+        pitches = await _query(latitude, longitude, radius);
+      } on OsmPitchException {
+        // Si un radio mayor falla, se queda lo que ya se encontró.
+        if (found != null) break;
+        rethrow;
+      }
+
+      found = OsmPitchSearch(pitches: pitches, radiusMeters: radius);
+
+      if (pitches.length >= enoughResults) break;
+    }
+
+    _cache[key] = found!;
+
+    return found;
+  }
+
+  Future<List<OsmPitch>> _query(
+    double latitude,
+    double longitude,
+    int radius,
+  ) async {
+    final query =
+        '''
 [out:json][timeout:25];
-nwr["leisure"="pitch"]["sport"~"soccer|football|futsal"](around:$radiusMeters,$latitude,$longitude);
+nwr["leisure"="pitch"]["sport"~"soccer|football|futsal"](around:$radius,$latitude,$longitude);
 out center $maxResults;
 ''';
 
-    http.Response response;
+    OsmPitchException? lastError;
 
-    try {
-      response = await _client
-          .post(
-            Uri.parse(_endpoint),
-            headers: kIsWeb
-                ? const <String, String>{}
-                : const <String, String>{
-                    'User-Agent': 'CanchaYA/1.0 (app de ligas de futbol)',
-                  },
-            body: <String, String>{'data': query},
-          )
-          .timeout(const Duration(seconds: 30));
-    } catch (_) {
-      throw const OsmPitchException(
-        'No se pudieron consultar canchas en OpenStreetMap. Revisa tu '
-        'conexión.',
+    for (final endpoint in _endpoints) {
+      http.Response response;
+
+      try {
+        response = await _client
+            .post(
+              Uri.parse(endpoint),
+              headers: kIsWeb
+                  ? const <String, String>{}
+                  : const <String, String>{
+                      'User-Agent': 'CanchaYA/1.0 (app de ligas de futbol)',
+                    },
+              body: <String, String>{'data': query},
+            )
+            .timeout(const Duration(seconds: 30));
+      } catch (_) {
+        lastError = const OsmPitchException(
+          'No se pudieron consultar canchas en OpenStreetMap. Revisa tu '
+          'conexión.',
+        );
+        continue;
+      }
+
+      if (response.statusCode == 429 || response.statusCode == 504) {
+        lastError = const OsmPitchException(
+          'OpenStreetMap está ocupado. Inténtalo en unos minutos.',
+        );
+        continue;
+      }
+
+      if (response.statusCode != 200) {
+        lastError = const OsmPitchException(
+          'OpenStreetMap no respondió. Inténtalo más tarde.',
+        );
+        continue;
+      }
+
+      final pitches = parseOverpassPitches(utf8.decode(response.bodyBytes));
+
+      pitches.sort(
+        (a, b) => _squaredDistance(
+          a,
+          latitude,
+          longitude,
+        ).compareTo(_squaredDistance(b, latitude, longitude)),
       );
+
+      return pitches;
     }
 
-    if (response.statusCode == 429 || response.statusCode == 504) {
-      throw const OsmPitchException(
-        'OpenStreetMap está ocupado. Inténtalo en unos minutos.',
-      );
-    }
+    throw lastError ??
+        const OsmPitchException(
+          'OpenStreetMap no respondió. Inténtalo más tarde.',
+        );
+  }
 
-    if (response.statusCode != 200) {
-      throw const OsmPitchException(
-        'OpenStreetMap no respondió. Inténtalo más tarde.',
-      );
-    }
-
-    final pitches = parseOverpassPitches(utf8.decode(response.bodyBytes));
-    _cache[key] = pitches;
-
-    return pitches;
+  static double _squaredDistance(OsmPitch pitch, double lat, double lon) {
+    final dLat = pitch.latitude - lat;
+    final dLon = pitch.longitude - lon;
+    return dLat * dLat + dLon * dLon;
   }
 }
 
@@ -178,12 +264,8 @@ List<OsmPitch> parseOverpassPitches(String body) {
     final id = '$type/${element['id'] ?? ''}';
 
     final center = element['center'];
-    final latitude = _toDouble(
-      center is Map ? center['lat'] : element['lat'],
-    );
-    final longitude = _toDouble(
-      center is Map ? center['lon'] : element['lon'],
-    );
+    final latitude = _toDouble(center is Map ? center['lat'] : element['lat']);
+    final longitude = _toDouble(center is Map ? center['lon'] : element['lon']);
 
     if (latitude == null ||
         longitude == null ||
