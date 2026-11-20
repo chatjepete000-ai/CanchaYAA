@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../data/team_repository.dart';
 import '../domain/team_models.dart';
+import 'face_photo_capture_screen.dart';
 import 'player_join_screen.dart';
 import 'team_lineup_screen.dart';
 import 'team_manager_screen.dart';
@@ -801,6 +802,23 @@ class _PlayerTeamCard
                 ],
 
                 // =================================================
+                // FOTO PENDIENTE (jugadores que entraron antes)
+                // =================================================
+
+                if (!assignment.hasPhoto) ...[
+                  const SizedBox(
+                    height: 14,
+                  ),
+
+                  _MissingPhotoBanner(
+                    assignment:
+                        assignment,
+                    repository:
+                        repository,
+                  ),
+                ],
+
+                // =================================================
                 // PRÓXIMO PARTIDO, CÓMO LLEGAR Y ALINEACIÓN
                 // =================================================
 
@@ -855,6 +873,128 @@ class _PlayerTeamCard
           ),
         );
       },
+    );
+  }
+}
+
+// =============================================================
+// AVISO: AGREGA TU FOTO
+// =============================================================
+
+class _MissingPhotoBanner extends StatefulWidget {
+  const _MissingPhotoBanner({
+    required this.assignment,
+    required this.repository,
+  });
+
+  final TeamAssignment assignment;
+
+  final TeamRepository repository;
+
+  @override
+  State<_MissingPhotoBanner> createState() =>
+      _MissingPhotoBannerState();
+}
+
+class _MissingPhotoBannerState extends State<_MissingPhotoBanner> {
+  bool _saving = false;
+
+  Future<void> _addPhoto() async {
+    final photoUrl = await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(
+        builder: (_) => const FacePhotoCaptureScreen(
+          title: 'Foto para la plantilla',
+          confirmLabel: 'Guardar foto',
+        ),
+      ),
+    );
+
+    if (photoUrl == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+    });
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      await widget.repository.updateMyAssignmentPhoto(
+        assignmentId: widget.assignment.id,
+        photoUrl: photoUrl,
+      );
+
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Tu foto quedó en la plantilla del equipo.'),
+        ),
+      );
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo guardar la foto. Intenta de nuevo.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    final colors = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.primaryContainer.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            CupertinoIcons.camera_fill,
+            color: colors.primary,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Agrega tu foto',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Tu cara aparecerá en la plantilla y la alineación.',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          _saving
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : TextButton(
+                  onPressed: _addPhoto,
+                  child: const Text('Tomar'),
+                ),
+        ],
+      ),
     );
   }
 }

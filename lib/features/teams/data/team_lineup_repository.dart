@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../domain/player_photo.dart';
 import '../domain/team_lineup.dart';
 import '../domain/team_models.dart';
 
@@ -17,10 +18,14 @@ class LineupPlayer {
   const LineupPlayer({
     required this.userId,
     required this.displayName,
+    this.photoUrl = '',
   });
 
   final String userId;
   final String displayName;
+
+  /// Foto de la cara guardada en su asignación ('' si no tiene).
+  final String photoUrl;
 }
 
 class TeamLineupRepository {
@@ -103,6 +108,9 @@ class TeamLineupRepository {
               (assignment) => LineupPlayer(
                 userId: assignment.userId,
                 displayName: lineupNameFor(assignment.userDisplayName),
+                photoUrl: isTrustedPlayerPhotoUrl(assignment.userPhotoUrl)
+                    ? assignment.userPhotoUrl
+                    : '',
               ),
             )
             .toList();
@@ -128,6 +136,7 @@ class TeamLineupRepository {
     required String formation,
     required List<String> slots,
     required Map<String, String> namesById,
+    Map<String, String> photosById = const <String, String>{},
   }) async {
     final user = _auth.currentUser;
 
@@ -147,6 +156,13 @@ class TeamLineupRepository {
       );
     }
 
+    final photoUrls = <String>[
+      for (final id in slots)
+        id.isEmpty || !isTrustedPlayerPhotoUrl(photosById[id] ?? '')
+            ? ''
+            : photosById[id]!.trim(),
+    ];
+
     await _lineup(team.id).set(
       <String, dynamic>{
         'teamId': team.id,
@@ -159,6 +175,9 @@ class TeamLineupRepository {
           for (final id in slots)
             id.isEmpty ? '' : lineupNameFor(namesById[id] ?? ''),
         ],
+        // Solo se envía si alguien tiene foto.
+        if (photoUrls.any((url) => url.isNotEmpty))
+          'playerPhotoUrls': photoUrls,
         'updatedByUserId': user.uid,
         'updatedAt': FieldValue.serverTimestamp(),
       },

@@ -15,6 +15,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 //   playerNames   nombre visible de cada posición (para que los
 //                 jugadores vean y exporten la alineación sin
 //                 consultar datos privados).
+//   playerPhotoUrls  foto de la cara de cada posición ('' = sin
+//                 foto). Opcional: alineaciones anteriores no la
+//                 tienen.
 //   updatedByUserId, updatedAt
 //
 // Solo el encargado del equipo la modifica (firestore.rules).
@@ -201,6 +204,7 @@ class TeamLineup {
     required this.formation,
     required this.slots,
     required this.playerNames,
+    this.playerPhotoUrls = const <String>[],
     this.updatedAt,
   });
 
@@ -209,7 +213,16 @@ class TeamLineup {
   final String formation;
   final List<String> slots;
   final List<String> playerNames;
+
+  /// Misma longitud que [slots] cuando viene de Firestore.
+  final List<String> playerPhotoUrls;
   final DateTime? updatedAt;
+
+  /// Foto de la posición [index] o '' si no hay.
+  String photoAt(int index) =>
+      index >= 0 && index < playerPhotoUrls.length
+          ? playerPhotoUrls[index]
+          : '';
 
   int get filledCount => slots.where((id) => id.isNotEmpty).length;
 
@@ -256,6 +269,7 @@ class TeamLineup {
       formation: formation.id,
       slots: readList(data['slots']),
       playerNames: readList(data['playerNames']),
+      playerPhotoUrls: readList(data['playerPhotoUrls']),
       updatedAt: updatedAt is Timestamp ? updatedAt.toDate() : null,
     );
   }

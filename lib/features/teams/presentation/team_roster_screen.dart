@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../domain/team_models.dart';
+import 'widgets/player_avatar.dart';
 
 class TeamRosterScreen extends StatelessWidget {
   const TeamRosterScreen({
@@ -476,14 +477,6 @@ class _PlayerCard
             ? cleanName
             : 'Jugador $number';
 
-    final initial =
-        displayName
-            .substring(
-              0,
-              1,
-            )
-            .toUpperCase();
-
     return Card(
       elevation: 0,
       clipBehavior:
@@ -495,21 +488,11 @@ class _PlayerCard
         ),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 25,
-              backgroundColor:
-                  colors
-                      .primaryContainer,
-              child: Text(
-                initial,
-                style: TextStyle(
-                  color:
-                      colors.primary,
-                  fontSize: 18,
-                  fontWeight:
-                      FontWeight.w900,
-                ),
-              ),
+            PlayerAvatar(
+              name: displayName,
+              photoUrl:
+                  assignment.userPhotoUrl,
+              size: 50,
             ),
 
             const SizedBox(

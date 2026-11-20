@@ -6,8 +6,10 @@ import 'package:flutter/rendering.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../data/team_lineup_repository.dart';
+import '../domain/player_photo.dart';
 import '../domain/team_lineup.dart';
 import '../domain/team_models.dart';
+import 'widgets/player_avatar.dart';
 
 // ================================================================
 // F04 · ALINEACIÓN VISUAL
@@ -42,11 +44,13 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
 
   final GlobalKey _exportKey = GlobalKey();
 
-  late final Future<String> _formatFuture =
-      _repository.getTournamentFormat(widget.team.tournamentId);
+  late final Future<String> _formatFuture = _repository.getTournamentFormat(
+    widget.team.tournamentId,
+  );
 
-  late final Stream<TeamLineup?> _lineupStream =
-      _repository.watchLineup(widget.team.id);
+  late final Stream<TeamLineup?> _lineupStream = _repository.watchLineup(
+    widget.team.id,
+  );
 
   late final Stream<List<LineupPlayer>> _rosterStream = widget.canEdit
       ? _repository.watchRosterPlayers(widget.team)
@@ -69,10 +73,7 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
     // nueva con el formato correcto.
     final lineup = saved != null && saved.format == tournamentFormat
         ? saved
-        : TeamLineup.empty(
-            teamId: widget.team.id,
-            format: tournamentFormat,
-          );
+        : TeamLineup.empty(teamId: widget.team.id, format: tournamentFormat);
 
     _format = lineup.format;
     _formationId = lineup.formation;
@@ -99,7 +100,10 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
     });
   }
 
-  Future<void> _save(Map<String, String> namesById) async {
+  Future<void> _save(
+    Map<String, String> namesById,
+    Map<String, String> photosById,
+  ) async {
     setState(() {
       _saving = true;
     });
@@ -111,6 +115,7 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
         formation: _formationId!,
         slots: _slots!,
         namesById: namesById,
+        photosById: photosById,
       );
 
       if (!mounted) return;
@@ -126,12 +131,11 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
       final text = error.toString();
 
       _showMessage(
-        text.contains('permission-denied') ||
-                text.contains('PERMISSION_DENIED')
+        text.contains('permission-denied') || text.contains('PERMISSION_DENIED')
             ? 'No tienes permiso para modificar esta alineación.'
             : error is ArgumentError
-                ? '${error.message}'
-                : 'No se pudo guardar. Revisa tu conexión.',
+            ? '${error.message}'
+            : 'No se pudo guardar. Revisa tu conexión.',
       );
     } finally {
       if (mounted) {
@@ -148,8 +152,9 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
     });
 
     try {
-      final boundary = _exportKey.currentContext?.findRenderObject()
-          as RenderRepaintBoundary?;
+      final boundary =
+          _exportKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
 
       if (boundary == null) {
         throw StateError('No se encontró la alineación.');
@@ -196,9 +201,7 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
   }
 
   void _showMessage(String text) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text)),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
   Future<void> _pickPlayerForSlot(
@@ -235,9 +238,12 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
                           : CupertinoIcons.person_crop_circle,
                     ),
                     title: Text(player.displayName),
-                    subtitle: slots.contains(player.userId) &&
+                    subtitle:
+                        slots.contains(player.userId) &&
                             player.userId != current
-                        ? const Text('Ya está en otra posición (se intercambian)')
+                        ? const Text(
+                            'Ya está en otra posición (se intercambian)',
+                          )
                         : null,
                     onTap: () => Navigator.pop(sheetContext, player.userId),
                   ),
@@ -262,9 +268,7 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Alineación'),
-      ),
+      appBar: AppBar(title: const Text('Alineación')),
       body: SafeArea(
         top: false,
         child: FutureBuilder<String>(
@@ -286,8 +290,7 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
                   );
                 }
 
-                if (lineupSnapshot.connectionState ==
-                        ConnectionState.waiting &&
+                if (lineupSnapshot.connectionState == ConnectionState.waiting &&
                     !lineupSnapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
@@ -309,9 +312,7 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
                     }
 
                     if (!rosterSnapshot.hasData) {
-                      return const Center(
-                        child: CircularProgressIndicator(),
-                      );
+                      return const Center(child: CircularProgressIndicator());
                     }
 
                     _loadDraft(saved, tournamentFormat);
@@ -353,13 +354,11 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
             teamName: widget.team.displayName,
             formation: formation,
             names: saved.playerNames,
+            photos: saved.playerPhotoUrls,
           ),
         ),
         const SizedBox(height: 16),
-        _ExportButton(
-          exporting: _exporting,
-          onPressed: _export,
-        ),
+        _ExportButton(exporting: _exporting, onPressed: _export),
       ],
     );
   }
@@ -395,8 +394,41 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
       for (final id in slots) id.isEmpty ? '' : (namesById[id] ?? 'Jugador'),
     ];
 
-    final bench =
-        roster.where((player) => !slots.contains(player.userId)).toList();
+    final photosById = <String, String>{
+      for (final player in roster)
+        if (player.photoUrl.isNotEmpty) player.userId: player.photoUrl,
+    };
+
+    // Fotos guardadas, por si un jugador ya no aparece en la plantilla.
+    if (saved != null) {
+      for (var i = 0; i < saved.slots.length; i++) {
+        final id = saved.slots[i];
+        final photo = saved.photoAt(i);
+        if (id.isNotEmpty && photo.isNotEmpty && !photosById.containsKey(id)) {
+          photosById[id] = photo;
+        }
+      }
+    }
+
+    final photos = [
+      for (final id in slots) id.isEmpty ? '' : (photosById[id] ?? ''),
+    ];
+
+    // Si un jugador agregó su foto después de guardar, el encargado
+    // puede volver a guardar para que la vean todos.
+    final photosOutdated =
+        saved != null &&
+        saved.slots.length == slots.length &&
+        [
+          for (var i = 0; i < slots.length; i++)
+            slots[i].isNotEmpty && photos[i] != saved.photoAt(i),
+        ].any((changed) => changed);
+
+    final canSave = _dirty || photosOutdated;
+
+    final bench = roster
+        .where((player) => !slots.contains(player.userId))
+        .toList();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 32),
@@ -415,9 +447,7 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
               ChoiceChip(
                 label: Text(option.id),
                 selected: option.id == formation.id,
-                onSelected: _saving
-                    ? null
-                    : (_) => _changeFormation(option.id),
+                onSelected: _saving ? null : (_) => _changeFormation(option.id),
               ),
           ],
         ),
@@ -428,6 +458,7 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
             teamName: widget.team.displayName,
             formation: formation,
             names: names,
+            photos: photos,
             slotBuilder: (index, child) => _EditableSlot(
               slotIndex: index,
               playerId: slots[index],
@@ -450,9 +481,9 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
         Text(
           roster.isEmpty
               ? 'Aún no hay jugadores aceptados en el equipo. Invítalos '
-                  'desde Administrar equipo.'
+                    'desde Administrar equipo.'
               : 'Mantén presionado un jugador y arrástralo a su posición, '
-                  'o toca una posición para elegirlo.',
+                    'o toca una posición para elegirlo.',
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: 10),
@@ -460,9 +491,8 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
           // Soltar un jugador de la cancha en la banca lo retira.
           onWillAcceptWithDetails: (details) =>
               !_saving && slots.contains(details.data),
-          onAcceptWithDetails: (details) => _update(
-            clearSlot(slots, slots.indexOf(details.data)),
-          ),
+          onAcceptWithDetails: (details) =>
+              _update(clearSlot(slots, slots.indexOf(details.data))),
           builder: (context, candidates, rejected) {
             return Container(
               constraints: const BoxConstraints(minHeight: 56),
@@ -492,14 +522,21 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
                               color: Colors.transparent,
                               child: _PlayerChip(
                                 name: player.displayName,
+                                photoUrl: player.photoUrl,
                                 dragging: true,
                               ),
                             ),
                             childWhenDragging: Opacity(
                               opacity: 0.35,
-                              child: _PlayerChip(name: player.displayName),
+                              child: _PlayerChip(
+                                name: player.displayName,
+                                photoUrl: player.photoUrl,
+                              ),
                             ),
-                            child: _PlayerChip(name: player.displayName),
+                            child: _PlayerChip(
+                              name: player.displayName,
+                              photoUrl: player.photoUrl,
+                            ),
                           ),
                       ],
                     ),
@@ -508,7 +545,9 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
         ),
         const SizedBox(height: 18),
         FilledButton.icon(
-          onPressed: _saving || !_dirty ? null : () => _save(namesById),
+          onPressed: _saving || !canSave
+              ? null
+              : () => _save(namesById, photosById),
           icon: _saving
               ? const SizedBox(
                   width: 18,
@@ -516,13 +555,14 @@ class _TeamLineupScreenState extends State<TeamLineupScreen> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(CupertinoIcons.checkmark_alt),
-          label: Text(_dirty ? 'Guardar alineación' : 'Alineación guardada'),
+          label: Text(
+            _dirty
+                ? 'Guardar alineación'
+                : (photosOutdated ? 'Actualizar fotos' : 'Alineación guardada'),
+          ),
         ),
         const SizedBox(height: 10),
-        _ExportButton(
-          exporting: _exporting,
-          onPressed: _export,
-        ),
+        _ExportButton(exporting: _exporting, onPressed: _export),
       ],
     );
   }
@@ -539,12 +579,14 @@ class _LineupCard extends StatelessWidget {
     required this.teamName,
     required this.formation,
     required this.names,
+    this.photos = const <String>[],
     this.slotBuilder,
   });
 
   final String teamName;
   final LineupFormation formation;
   final List<String> names;
+  final List<String> photos;
   final _SlotBuilder? slotBuilder;
 
   @override
@@ -615,6 +657,7 @@ class _LineupCard extends StatelessWidget {
                           i,
                           _SlotView(
                             name: i < names.length ? names[i] : '',
+                            photoUrl: i < photos.length ? photos[i] : '',
                             isGoalkeeper: positions[i].isGoalkeeper,
                             editable: slotBuilder != null,
                           ),
@@ -648,12 +691,14 @@ class _LineupCard extends StatelessWidget {
 class _SlotView extends StatelessWidget {
   const _SlotView({
     required this.name,
+    this.photoUrl = '',
     required this.isGoalkeeper,
     required this.editable,
     this.highlighted = false,
   });
 
   final String name;
+  final String photoUrl;
   final bool isGoalkeeper;
   final bool editable;
   final bool highlighted;
@@ -662,35 +707,50 @@ class _SlotView extends StatelessWidget {
   Widget build(BuildContext context) {
     final filled = name.trim().isNotEmpty;
 
+    final hasPhoto = filled && playerFaceThumbnailUrl(photoUrl).isNotEmpty;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: filled
-                ? (isGoalkeeper
-                    ? const Color(0xFFF2B705)
-                    : Colors.white)
-                : Colors.white.withValues(alpha: highlighted ? 0.45 : 0.18),
-            border: Border.all(
-              color: highlighted
-                  ? const Color(0xFF43E97B)
-                  : Colors.white.withValues(alpha: 0.8),
-              width: highlighted ? 3 : 1.5,
+        if (hasPhoto)
+          PlayerAvatar(
+            name: name,
+            photoUrl: photoUrl,
+            size: 38,
+            backgroundColor: isGoalkeeper
+                ? const Color(0xFFF2B705)
+                : Colors.white,
+            foregroundColor: const Color(0xFF0B3D25),
+            borderColor: highlighted
+                ? const Color(0xFF43E97B)
+                : (isGoalkeeper ? const Color(0xFFF2B705) : Colors.white),
+            borderWidth: highlighted ? 3 : 2,
+          )
+        else
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: filled
+                  ? (isGoalkeeper ? const Color(0xFFF2B705) : Colors.white)
+                  : Colors.white.withValues(alpha: highlighted ? 0.45 : 0.18),
+              border: Border.all(
+                color: highlighted
+                    ? const Color(0xFF43E97B)
+                    : Colors.white.withValues(alpha: 0.8),
+                width: highlighted ? 3 : 1.5,
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              filled
+                  ? CupertinoIcons.person_fill
+                  : (editable ? CupertinoIcons.plus : CupertinoIcons.person),
+              size: 18,
+              color: filled ? const Color(0xFF0B3D25) : Colors.white,
             ),
           ),
-          alignment: Alignment.center,
-          child: Icon(
-            filled
-                ? CupertinoIcons.person_fill
-                : (editable ? CupertinoIcons.plus : CupertinoIcons.person),
-            size: 18,
-            color: filled ? const Color(0xFF0B3D25) : Colors.white,
-          ),
-        ),
         const SizedBox(height: 3),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -736,13 +796,13 @@ class _EditableSlot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final target = DragTarget<String>(
-      onWillAcceptWithDetails: (details) =>
-          enabled && details.data != playerId,
+      onWillAcceptWithDetails: (details) => enabled && details.data != playerId,
       onAcceptWithDetails: (details) => onDropPlayer(details.data),
       builder: (context, candidates, rejected) {
         final view = child is _SlotView
             ? _SlotView(
                 name: (child as _SlotView).name,
+                photoUrl: (child as _SlotView).photoUrl,
                 isGoalkeeper: (child as _SlotView).isGoalkeeper,
                 editable: true,
                 highlighted: candidates.isNotEmpty,
@@ -779,10 +839,12 @@ class _EditableSlot extends StatelessWidget {
 class _PlayerChip extends StatelessWidget {
   const _PlayerChip({
     required this.name,
+    this.photoUrl = '',
     this.dragging = false,
   });
 
   final String name;
+  final String photoUrl;
   final bool dragging;
 
   @override
@@ -792,7 +854,9 @@ class _PlayerChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: dragging ? colors.primary : colors.primary.withValues(alpha: 0.1),
+        color: dragging
+            ? colors.primary
+            : colors.primary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(100),
         boxShadow: dragging
             ? [
@@ -806,11 +870,14 @@ class _PlayerChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            CupertinoIcons.person_fill,
-            size: 16,
-            color: dragging ? Colors.white : colors.primary,
-          ),
+          if (playerFaceThumbnailUrl(photoUrl).isNotEmpty)
+            PlayerAvatar(name: name, photoUrl: photoUrl, size: 22)
+          else
+            Icon(
+              CupertinoIcons.person_fill,
+              size: 16,
+              color: dragging ? Colors.white : colors.primary,
+            ),
           const SizedBox(width: 6),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 150),
@@ -830,10 +897,7 @@ class _PlayerChip extends StatelessWidget {
 }
 
 class _ExportButton extends StatelessWidget {
-  const _ExportButton({
-    required this.exporting,
-    required this.onPressed,
-  });
+  const _ExportButton({required this.exporting, required this.onPressed});
 
   final bool exporting;
   final VoidCallback onPressed;
@@ -855,10 +919,7 @@ class _ExportButton extends StatelessWidget {
 }
 
 class _InfoMessage extends StatelessWidget {
-  const _InfoMessage({
-    required this.icon,
-    required this.text,
-  });
+  const _InfoMessage({required this.icon, required this.text});
 
   final IconData icon;
   final String text;
@@ -871,11 +932,7 @@ class _InfoMessage extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 44,
-              color: Theme.of(context).colorScheme.primary,
-            ),
+            Icon(icon, size: 44, color: Theme.of(context).colorScheme.primary),
             const SizedBox(height: 12),
             Text(text, textAlign: TextAlign.center),
           ],

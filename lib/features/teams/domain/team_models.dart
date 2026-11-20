@@ -480,6 +480,7 @@ class TeamAssignment {
     required this.assignedByUserId,
     this.userEmail = '',
     this.userDisplayName = '',
+    this.userPhotoUrl = '',
   });
 
   final String id;
@@ -489,6 +490,13 @@ class TeamAssignment {
   final String userEmail;
 
   final String userDisplayName;
+
+  /// Foto de la cara del jugador (Cloudinary). Solo la ven el
+  /// propio jugador, el encargado y el administrador de la liga.
+  final String userPhotoUrl;
+
+  bool get hasPhoto =>
+      userPhotoUrl.trim().isNotEmpty;
 
   final String teamId;
 
@@ -538,6 +546,11 @@ class TeamAssignment {
       userDisplayName:
           _readString(
         data['userDisplayName'],
+      ),
+
+      userPhotoUrl:
+          _readString(
+        data['userPhotoUrl'],
       ),
 
       teamId:
@@ -602,6 +615,12 @@ class TeamAssignment {
 
       'assignedByUserId':
           assignedByUserId,
+
+      // Solo se guarda si existe, para no alterar las
+      // asignaciones de encargado.
+      if (userPhotoUrl.trim().isNotEmpty)
+        'userPhotoUrl':
+            userPhotoUrl.trim(),
     };
   }
 

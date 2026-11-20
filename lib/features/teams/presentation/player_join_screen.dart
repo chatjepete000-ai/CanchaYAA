@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 
 import '../data/team_join_code_repository.dart';
 import '../domain/team_join_code.dart';
+import '../domain/player_photo.dart';
 import '../domain/team_models.dart';
+import 'face_photo_capture_screen.dart';
 import 'qr_scanner_screen.dart';
 
 class PlayerJoinScreen extends StatefulWidget {
@@ -278,6 +280,39 @@ class _PlayerJoinScreenState
       return;
     }
 
+    // ===========================================================
+    // FOTO DE LA CARA (obligatoria para unirse)
+    // ===========================================================
+    //
+    // Se usa en la plantilla y en la alineación del equipo.
+    // ===========================================================
+
+    final photoUrl =
+        await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(
+        builder: (_) =>
+            const FacePhotoCaptureScreen(
+          confirmLabel:
+              'Usar foto y unirme',
+        ),
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (photoUrl == null ||
+        !isTrustedPlayerPhotoUrl(
+          photoUrl,
+        )) {
+      _showMessage(
+        'Necesitas tomarte la foto de la cara para unirte al equipo.',
+      );
+
+      return;
+    }
+
     setState(() {
       _joining = true;
     });
@@ -286,6 +321,7 @@ class _PlayerJoinScreenState
       await _acceptPlayerInvitation(
         access: access,
         user: user,
+        photoUrl: photoUrl,
       );
 
       if (!mounted) {
@@ -357,6 +393,7 @@ class _PlayerJoinScreenState
   Future<void> _acceptPlayerInvitation({
     required TeamJoinCode access,
     required User user,
+    required String photoUrl,
   }) async {
     final firestore =
         FirebaseFirestore.instance;
@@ -465,6 +502,8 @@ class _PlayerJoinScreenState
           currentEmail,
       userDisplayName:
           user.displayName?.trim() ?? '',
+      userPhotoUrl:
+          photoUrl.trim(),
       teamId:
           teamId,
       leagueId:
@@ -941,6 +980,18 @@ class _PlayerJoinScreenState
               _ValidAccessCard(
                 access:
                     access,
+              ),
+
+              const SizedBox(
+                height: 14,
+              ),
+
+              const _MessageCard(
+                message:
+                    'Al unirte te pediremos una foto de tu cara para '
+                    'la plantilla y la alineación del equipo.',
+                isError:
+                    false,
               ),
 
               const SizedBox(

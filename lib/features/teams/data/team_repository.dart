@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../domain/player_photo.dart';
 import '../domain/team_models.dart';
 
 class TeamRepository {
@@ -1270,6 +1271,43 @@ class TeamRepository {
         'updatedAt':
             FieldValue
                 .serverTimestamp(),
+      },
+    );
+  }
+
+  // ============================================================
+  // FOTO DEL JUGADOR EN SU ASIGNACIÓN
+  // ============================================================
+  //
+  // Para jugadores que se unieron antes de que la foto fuera
+  // obligatoria. firestore.rules solo deja cambiar userPhotoUrl
+  // y updatedAt de la asignación activa del propio jugador.
+  // ============================================================
+
+  Future<void> updateMyAssignmentPhoto({
+    required String assignmentId,
+    required String photoUrl,
+  }) async {
+    final user = _auth.currentUser;
+
+    if (user == null) {
+      throw StateError(
+        'Debes iniciar sesión.',
+      );
+    }
+
+    final cleanUrl = photoUrl.trim();
+
+    if (!isTrustedPlayerPhotoUrl(cleanUrl)) {
+      throw ArgumentError(
+        'La foto no es válida.',
+      );
+    }
+
+    await _assignments.doc(assignmentId).update(
+      <String, dynamic>{
+        'userPhotoUrl': cleanUrl,
+        'updatedAt': FieldValue.serverTimestamp(),
       },
     );
   }

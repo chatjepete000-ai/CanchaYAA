@@ -384,6 +384,19 @@ service cloud.firestore {
             && value.matches('https://[^ ]+')));
     }
 
+    // Foto de la cara del jugador: solo imágenes de la cuenta de
+    // Cloudinary de CanchaYA (ver lib/features/teams/domain/player_photo.dart).
+    function validPlayerPhotoUrl(value) {
+      return value is string
+        && value.size() <= 2048
+        && value.matches('https://res[.]cloudinary[.]com/ns45i2wp/image/upload/[^ ]+');
+    }
+
+    function validOptionalPlayerPhoto(data) {
+      return !('userPhotoUrl' in data)
+        || validPlayerPhotoUrl(data.userPhotoUrl);
+    }
+
     function validTeamVisualUpdate(newData, oldData) {
       let changed = newData.diff(oldData).affectedKeys();
       return changed.hasOnly(['shortName', 'logoUrl', 'updatedAt'])
@@ -646,7 +659,7 @@ service cloud.firestore {
           'updatedByUserId', 'updatedAt'])
         && data.keys().hasOnly(['teamId', 'leagueId', 'tournamentId',
           'format', 'formation', 'slots', 'playerNames',
-          'updatedByUserId', 'updatedAt'])
+          'playerPhotoUrls', 'updatedByUserId', 'updatedAt'])
         && data.teamId == teamId
         && data.leagueId == team.leagueId
         && data.tournamentId == team.tournamentId
@@ -658,6 +671,9 @@ service cloud.firestore {
         && data.playerNames is list
         && data.slots.size() == lineupSlotCount(data.format)
         && data.playerNames.size() == data.slots.size()
+        && (!('playerPhotoUrls' in data)
+          || (data.playerPhotoUrls is list
+            && data.playerPhotoUrls.size() == data.slots.size()))
         && filled.toSet().size() == filled.size()
         && filled.toSet().hasOnly(team.playerUserIds)
         && data.updatedByUserId == request.auth.uid
@@ -1629,7 +1645,11 @@ service cloud.firestore {
           == 'teamManager'
 
         && request.resource.data.status
-          == 'active';
+          == 'active'
+
+        && validOptionalPlayerPhoto(
+          request.resource.data
+        );
 
       // ----------------------------------------------------------
       // CREAR ASIGNACIÓN DE JUGADOR
@@ -1673,6 +1693,11 @@ service cloud.firestore {
         && request.resource.data.status
           == 'active'
 
+        // Foto de la cara obligatoria para unirse.
+        && validPlayerPhotoUrl(
+          request.resource.data.userPhotoUrl
+        )
+
         && request.resource.data.joinCodeId
           == assignmentId
 
@@ -1702,6 +1727,25 @@ service cloud.firestore {
           /databases/$(database)/documents/teamJoinCodes/$(assignmentId)
         ).data.usedByUserId
           == request.auth.uid;
+
+      // ----------------------------------------------------------
+      // FOTO DEL PROPIO JUGADOR
+      // ----------------------------------------------------------
+      //
+      // Un jugador activo puede agregar o cambiar la foto de su
+      // propia asignación. No puede tocar ningún otro campo.
+      // ----------------------------------------------------------
+
+      allow update: if isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && resource.data.role == 'player'
+        && resource.data.status == 'active'
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly(['userPhotoUrl', 'updatedAt'])
+        && validPlayerPhotoUrl(request.resource.data.userPhotoUrl)
+        && request.resource.data.updatedAt == request.time;
 
       // ----------------------------------------------------------
       // REVOCAR ASIGNACIÓN AL ELIMINAR EL EQUIPO
