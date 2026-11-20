@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../data/team_repository.dart';
 import '../domain/team_models.dart';
 import 'player_join_screen.dart';
-import 'team_calendar_screen.dart';
 import 'team_lineup_screen.dart';
 import 'team_manager_screen.dart';
 import 'widgets/team_match_panel.dart';
@@ -13,7 +12,11 @@ import 'widgets/team_match_panel.dart';
 class TeamsScreen extends StatefulWidget {
   const TeamsScreen({
     super.key,
+    this.onOpenTournaments,
   });
+
+  /// Cambia a la pestaña Torneos de la barra inferior.
+  final VoidCallback? onOpenTournaments;
 
   @override
   State<TeamsScreen> createState() => _TeamsScreenState();
@@ -64,6 +67,8 @@ class _TeamsScreenState extends State<TeamsScreen> {
 
         return _TeamsStreams(
           repository: _repository,
+          onOpenTournaments:
+              widget.onOpenTournaments,
         );
       },
     );
@@ -84,9 +89,12 @@ class _TeamsScreenState extends State<TeamsScreen> {
 class _TeamsStreams extends StatelessWidget {
   const _TeamsStreams({
     required this.repository,
+    this.onOpenTournaments,
   });
 
   final TeamRepository repository;
+
+  final VoidCallback? onOpenTournaments;
 
   @override
   Widget build(BuildContext context) {
@@ -172,6 +180,8 @@ class _TeamsStreams extends StatelessWidget {
                   invitations,
               repository:
                   repository,
+              onOpenTournaments:
+                  onOpenTournaments,
             );
           },
         );
@@ -183,6 +193,14 @@ class _TeamsStreams extends StatelessWidget {
 // =============================================================
 // CONTENIDO PRINCIPAL
 // =============================================================
+//
+// Equipos es la experiencia personal del usuario:
+// su equipo, su próximo partido, cómo llegar, su alineación
+// y "Administrar equipo" si es encargado.
+//
+// El calendario general, los resultados y la tabla viven
+// en la pestaña Torneos.
+// =============================================================
 
 class _TeamsContent extends StatelessWidget {
   const _TeamsContent({
@@ -190,6 +208,7 @@ class _TeamsContent extends StatelessWidget {
     required this.playerAssignments,
     required this.invitations,
     required this.repository,
+    this.onOpenTournaments,
   });
 
   final List<TeamAssignment> managerAssignments;
@@ -200,39 +219,24 @@ class _TeamsContent extends StatelessWidget {
 
   final TeamRepository repository;
 
+  final VoidCallback? onOpenTournaments;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    final colors = theme.colorScheme;
-
-    // ===========================================================
-    // TODOS LOS EQUIPOS A LOS QUE PERTENECE EL USUARIO
-    // ===========================================================
-    //
-    // Puede ser jugador, encargado o ambas cosas.
-    //
-    // Estos IDs se envían al calendario para resaltar cualquier
-    // partido donde participe uno de sus equipos.
-    // ===========================================================
-
-    final highlightedTeamIds = <String>{
-      ...playerAssignments.map(
-        (assignment) => assignment.teamId,
-      ),
-      ...managerAssignments.map(
-        (assignment) => assignment.teamId,
-      ),
-    };
-
     final hasTeam =
-        highlightedTeamIds.isNotEmpty;
+        playerAssignments.isNotEmpty ||
+            managerAssignments.isNotEmpty;
+
+    final sectionTitleStyle =
+        theme.textTheme.titleLarge?.copyWith(
+      fontWeight: FontWeight.w900,
+    );
 
     return ListView(
-      physics:
-          const BouncingScrollPhysics(),
-      padding:
-          const EdgeInsets.fromLTRB(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(
         20,
         20,
         20,
@@ -245,220 +249,57 @@ class _TeamsContent extends StatelessWidget {
 
         Text(
           'Equipos',
-          style: theme
-              .textTheme
-              .headlineSmall
-              ?.copyWith(
-                fontWeight:
-                    FontWeight.w900,
-              ),
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w900,
+          ),
         ),
 
-        const SizedBox(
-          height: 6,
-        ),
+        const SizedBox(height: 6),
 
         Text(
           hasTeam
-              ? 'Consulta tus equipos, próximos partidos y calendario.'
-              : 'Consulta equipos, partidos y calendario.',
-          style:
-              theme.textTheme.bodyMedium,
+              ? 'Tu equipo, tu próximo partido y tu alineación.'
+              : 'Únete a tu equipo con el código o QR del encargado.',
+          style: theme.textTheme.bodyMedium,
         ),
 
-        const SizedBox(
-          height: 22,
-        ),
+        const SizedBox(height: 22),
 
         // =======================================================
-        // UNIRSE A UN EQUIPO
+        // INVITACIONES (solo si existen)
         // =======================================================
 
-        Container(
-          padding:
-              const EdgeInsets.all(
-            18,
+        if (invitations.isNotEmpty) ...[
+          Text(
+            'Invitaciones',
+            style: sectionTitleStyle,
           ),
-          decoration:
-              BoxDecoration(
-            gradient:
-                LinearGradient(
-              begin:
-                  Alignment.topLeft,
-              end:
-                  Alignment.bottomRight,
-              colors: [
-                colors.primary,
-                colors.primary
-                    .withValues(
-                  alpha: 0.78,
-                ),
-              ],
-            ),
-            borderRadius:
-                BorderRadius.circular(
-              22,
+
+          const SizedBox(height: 12),
+
+          ...invitations.map(
+            (invitation) => Padding(
+              padding: const EdgeInsets.only(
+                bottom: 12,
+              ),
+              child: _ManagerInvitationCard(
+                invitation: invitation,
+                repository: repository,
+              ),
             ),
           ),
-          child:
-              Row(
-            children: [
-              Container(
-                width: 54,
-                height: 54,
-                decoration:
-                    BoxDecoration(
-                  color: Colors.white
-                      .withValues(
-                    alpha: 0.16,
-                  ),
-                  borderRadius:
-                      BorderRadius.circular(
-                    16,
-                  ),
-                ),
-                child:
-                    const Icon(
-                  CupertinoIcons
-                      .person_add_solid,
-                  color:
-                      Colors.white,
-                  size: 26,
-                ),
-              ),
 
-              const SizedBox(
-                width: 14,
-              ),
-
-              Expanded(
-                child:
-                    Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Unirme a un equipo',
-                      style: theme
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(
-                            color:
-                                Colors.white,
-                            fontWeight:
-                                FontWeight.w900,
-                          ),
-                    ),
-
-                    const SizedBox(
-                      height: 4,
-                    ),
-
-                    Text(
-                      'Usa un código de invitación del encargado.',
-                      style: theme
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(
-                            color: Colors.white
-                                .withValues(
-                              alpha: 0.88,
-                            ),
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(
-                width: 8,
-              ),
-
-              Material(
-                color:
-                    Colors.transparent,
-                child:
-                    InkWell(
-                  customBorder:
-                      const CircleBorder(),
-                  onTap:
-                      () async {
-                    final joined =
-                        await Navigator
-                            .of(
-                      context,
-                    ).push<bool>(
-                      MaterialPageRoute<bool>(
-                        builder:
-                            (_) =>
-                                const PlayerJoinScreen(),
-                      ),
-                    );
-
-                    if (joined ==
-                            true &&
-                        context.mounted) {
-                      ScaffoldMessenger
-                              .of(
-                        context,
-                      ).showSnackBar(
-                        const SnackBar(
-                          content:
-                              Text(
-                            'Te uniste al equipo correctamente.',
-                          ),
-                        ),
-                      );
-                    }
-                  },
-                  child:
-                      Container(
-                    width: 42,
-                    height: 42,
-                    decoration:
-                        BoxDecoration(
-                      color: Colors.white
-                          .withValues(
-                        alpha: 0.16,
-                      ),
-                      shape:
-                          BoxShape.circle,
-                    ),
-                    child:
-                        const Icon(
-                      CupertinoIcons
-                          .chevron_right,
-                      color:
-                          Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(
-          height: 20,
-        ),
+          const SizedBox(height: 12),
+        ],
 
         // =======================================================
         // USUARIO SIN EQUIPO
         // =======================================================
-        //
-        // Si no pertenece a ningún equipo, no tiene sentido
-        // mostrar "Mi próximo partido".
-        //
-        // En su lugar tiene acceso directo al calendario general.
-        // =======================================================
 
-        if (!hasTeam) ...[
-          const _PublicCalendarCard(),
-
-          const SizedBox(
-            height: 26,
+        if (!hasTeam)
+          NoTeamCard(
+            onJoin: () => _openJoinScreen(context),
           ),
-        ],
 
         // =======================================================
         // EQUIPOS COMO JUGADOR
@@ -467,43 +308,24 @@ class _TeamsContent extends StatelessWidget {
         if (playerAssignments.isNotEmpty) ...[
           Text(
             'Mis equipos',
-            style: theme
-                .textTheme
-                .titleLarge
-                ?.copyWith(
-                  fontWeight:
-                      FontWeight.w900,
-                ),
+            style: sectionTitleStyle,
           ),
 
-          const SizedBox(
-            height: 12,
-          ),
+          const SizedBox(height: 12),
 
           ...playerAssignments.map(
-            (
-              assignment,
-            ) =>
-                Padding(
-              padding:
-                  const EdgeInsets.only(
+            (assignment) => Padding(
+              padding: const EdgeInsets.only(
                 bottom: 12,
               ),
-              child:
-                  _PlayerTeamCard(
-                assignment:
-                    assignment,
-                repository:
-                    repository,
-                highlightedTeamIds:
-                    highlightedTeamIds,
+              child: _PlayerTeamCard(
+                assignment: assignment,
+                repository: repository,
               ),
             ),
           ),
 
-          const SizedBox(
-            height: 16,
-          ),
+          const SizedBox(height: 16),
         ],
 
         // =======================================================
@@ -513,341 +335,172 @@ class _TeamsContent extends StatelessWidget {
         if (managerAssignments.isNotEmpty) ...[
           Text(
             'Equipos que administras',
-            style: theme
-                .textTheme
-                .titleLarge
-                ?.copyWith(
-                  fontWeight:
-                      FontWeight.w900,
-                ),
+            style: sectionTitleStyle,
           ),
 
-          const SizedBox(
-            height: 12,
-          ),
+          const SizedBox(height: 12),
 
           ...managerAssignments.map(
-            (
-              assignment,
-            ) =>
-                Padding(
-              padding:
-                  const EdgeInsets.only(
+            (assignment) => Padding(
+              padding: const EdgeInsets.only(
                 bottom: 12,
               ),
-              child:
-                  _ManagedTeamCard(
-                assignment:
-                    assignment,
-                repository:
-                    repository,
-                highlightedTeamIds:
-                    highlightedTeamIds,
+              child: _ManagedTeamCard(
+                assignment: assignment,
+                repository: repository,
               ),
             ),
           ),
 
-          const SizedBox(
-            height: 20,
-          ),
+          const SizedBox(height: 8),
         ],
 
         // =======================================================
-        // INVITACIONES
+        // ACCESO A TORNEOS + UNIRME A OTRO EQUIPO
         // =======================================================
 
-        Text(
-          'Invitaciones',
-          style: theme
-              .textTheme
-              .titleLarge
-              ?.copyWith(
-                fontWeight:
-                    FontWeight.w900,
-              ),
-        ),
-
-        const SizedBox(
-          height: 12,
-        ),
-
-        if (invitations.isEmpty)
-          Card(
-            elevation: 0,
-            child:
-                Padding(
-              padding:
-                  const EdgeInsets.all(
-                20,
-              ),
-              child:
-                  Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration:
-                        BoxDecoration(
-                      color: colors
-                          .primaryContainer,
-                      borderRadius:
-                          BorderRadius.circular(
-                        14,
-                      ),
-                    ),
-                    child:
-                        Icon(
-                      CupertinoIcons
-                          .envelope,
-                      color:
-                          colors.primary,
-                    ),
-                  ),
-
-                  const SizedBox(
-                    width: 14,
-                  ),
-
-                  const Expanded(
-                    child:
-                        Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Sin invitaciones pendientes',
-                          style:
-                              TextStyle(
-                            fontWeight:
-                                FontWeight.w900,
-                          ),
-                        ),
-
-                        SizedBox(
-                          height: 5,
-                        ),
-
-                        Text(
-                          'Cuando un administrador de liga te invite a ser encargado de un equipo, aparecerá aquí.',
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+        if (hasTeam) ...[
+          if (onOpenTournaments != null) ...[
+            TournamentsShortcutCard(
+              onTap: onOpenTournaments!,
             ),
-          )
-        else
-          ...invitations.map(
-            (
-              invitation,
-            ) =>
-                Padding(
-              padding:
-                  const EdgeInsets.only(
-                bottom: 12,
+
+            const SizedBox(height: 14),
+          ],
+
+          Center(
+            child: TextButton.icon(
+              onPressed: () => _openJoinScreen(context),
+              icon: const Icon(
+                CupertinoIcons.person_add,
+                size: 18,
               ),
-              child:
-                  _ManagerInvitationCard(
-                invitation:
-                    invitation,
-                repository:
-                    repository,
+              label: const Text(
+                'Unirme a otro equipo',
               ),
             ),
           ),
-
-        const SizedBox(
-          height: 24,
-        ),
-
-        // =======================================================
-        // MENSAJE SIN EQUIPO
-        // =======================================================
-
-        if (!hasTeam)
-          Container(
-            padding:
-                const EdgeInsets.all(
-              18,
-            ),
-            decoration:
-                BoxDecoration(
-              color: colors
-                  .surfaceContainerHighest,
-              borderRadius:
-                  BorderRadius.circular(
-                18,
-              ),
-            ),
-            child:
-                Row(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  CupertinoIcons
-                      .info_circle,
-                  color:
-                      colors.primary,
-                ),
-
-                const SizedBox(
-                  width: 12,
-                ),
-
-                const Expanded(
-                  child:
-                      Text(
-                    'Todavía no perteneces a ningún equipo. '
-                    'Puedes consultar el calendario general o ingresar mediante un código de invitación.',
-                  ),
-                ),
-              ],
-            ),
-          ),
+        ],
       ],
     );
   }
 }
 
 // =============================================================
-// TARJETA CALENDARIO PARA USUARIO SIN EQUIPO
+// ABRIR "UNIRME A UN EQUIPO"
 // =============================================================
 
-class _PublicCalendarCard
-    extends StatelessWidget {
-  const _PublicCalendarCard();
+Future<void> _openJoinScreen(
+  BuildContext context,
+) async {
+  final joined = await Navigator.of(context).push<bool>(
+    MaterialPageRoute<bool>(
+      builder: (_) => const PlayerJoinScreen(),
+    ),
+  );
+
+  if (joined == true && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Te uniste al equipo correctamente.',
+        ),
+      ),
+    );
+  }
+}
+
+// =============================================================
+// ESTADO SIN EQUIPO
+// =============================================================
+
+/// Lo único que ve un usuario que todavía no pertenece
+/// a ningún equipo: el mensaje y el botón para unirse.
+class NoTeamCard extends StatelessWidget {
+  const NoTeamCard({
+    super.key,
+    required this.onJoin,
+  });
+
+  final VoidCallback onJoin;
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final theme =
-        Theme.of(context);
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
 
-    final colors =
-        theme.colorScheme;
+    final colors = theme.colorScheme;
 
     return Container(
-      padding:
-          const EdgeInsets.all(
-        18,
+      padding: const EdgeInsets.fromLTRB(
+        20,
+        28,
+        20,
+        22,
       ),
-      decoration:
-          BoxDecoration(
-        color:
-            colors.surface,
-        borderRadius:
-            BorderRadius.circular(
-          22,
-        ),
-        border:
-            Border.all(
-          color: colors
-              .outlineVariant
-              .withValues(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: colors.outlineVariant.withValues(
             alpha: 0.7,
           ),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(
+              alpha: 0.04,
+            ),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
-      child:
-          Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+      child: Column(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration:
-                    BoxDecoration(
-                  color: colors
-                      .primaryContainer,
-                  borderRadius:
-                      BorderRadius.circular(
-                    15,
-                  ),
-                ),
-                child:
-                    Icon(
-                  CupertinoIcons
-                      .calendar,
-                  color:
-                      colors.primary,
-                  size: 25,
-                ),
-              ),
-
-              const SizedBox(
-                width: 14,
-              ),
-
-              Expanded(
-                child:
-                    Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Calendario de partidos',
-                      style: theme
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(
-                            fontWeight:
-                                FontWeight.w900,
-                          ),
-                    ),
-
-                    const SizedBox(
-                      height: 4,
-                    ),
-
-                    Text(
-                      'Consulta los próximos partidos, horarios, canchas y resultados.',
-                      style: theme
-                          .textTheme
-                          .bodyMedium,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: colors.primaryContainer,
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Icon(
+              CupertinoIcons.shield_fill,
+              color: colors.primary,
+              size: 34,
+            ),
           ),
 
-          const SizedBox(
-            height: 16,
+          const SizedBox(height: 18),
+
+          Text(
+            'Aún no perteneces a ningún equipo',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w900,
+            ),
           ),
+
+          const SizedBox(height: 8),
+
+          Text(
+            'Pídele al encargado de tu equipo el código '
+            'o el QR de invitación.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium,
+          ),
+
+          const SizedBox(height: 22),
 
           SizedBox(
-            width:
-                double.infinity,
-            child:
-                FilledButton.icon(
-              onPressed:
-                  () {
-                Navigator.of(
-                  context,
-                ).push(
-                  MaterialPageRoute<void>(
-                    builder:
-                        (_) =>
-                            const TeamCalendarScreen(),
-                  ),
-                );
-              },
-              icon:
-                  const Icon(
-                CupertinoIcons
-                    .calendar_today,
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onJoin,
+              icon: const Icon(
+                CupertinoIcons.person_add_solid,
               ),
-              label:
-                  const Text(
-                'Ver calendario',
+              label: const Text(
+                'Unirme a un equipo',
               ),
             ),
           ),
@@ -856,6 +509,88 @@ class _PublicCalendarCard
     );
   }
 }
+
+// =============================================================
+// ACCESO A TORNEOS
+// =============================================================
+
+/// Lleva a la pestaña Torneos, donde están el calendario
+/// general, los resultados y la tabla.
+class TournamentsShortcutCard extends StatelessWidget {
+  const TournamentsShortcutCard({
+    super.key,
+    required this.onTap,
+  });
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    final colors = theme.colorScheme;
+
+    return Material(
+      color: colors.primaryContainer.withValues(
+        alpha: 0.55,
+      ),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(
+                CupertinoIcons.calendar,
+                color: colors.primary,
+              ),
+
+              const SizedBox(width: 12),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Calendario, resultados y tabla',
+                      style: theme.textTheme.titleSmall
+                          ?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+
+                    const SizedBox(height: 2),
+
+                    Text(
+                      'Ir a Torneos',
+                      style: theme.textTheme.labelLarge
+                          ?.copyWith(
+                        color: colors.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              Icon(
+                CupertinoIcons.chevron_right,
+                size: 16,
+                color: colors.primary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 
 // =============================================================
 // TARJETA DE EQUIPO COMO JUGADOR
@@ -866,14 +601,11 @@ class _PlayerTeamCard
   const _PlayerTeamCard({
     required this.assignment,
     required this.repository,
-    required this.highlightedTeamIds,
   });
 
   final TeamAssignment assignment;
 
   final TeamRepository repository;
-
-  final Set<String> highlightedTeamIds;
 
   @override
   Widget build(
@@ -1069,7 +801,7 @@ class _PlayerTeamCard
                 ],
 
                 // =================================================
-                // PRÓXIMO PARTIDO + CALENDARIO
+                // PRÓXIMO PARTIDO, CÓMO LLEGAR Y ALINEACIÓN
                 // =================================================
 
                 if (team != null) ...[
@@ -1082,42 +814,6 @@ class _PlayerTeamCard
 
                   const SizedBox(
                     height: 12,
-                  ),
-
-                  SizedBox(
-                    width:
-                        double.infinity,
-                    child:
-                        OutlinedButton.icon(
-                      onPressed:
-                          () {
-                        Navigator.of(
-                          context,
-                        ).push(
-                          MaterialPageRoute<void>(
-                            builder:
-                                (_) =>
-                                    TeamCalendarScreen(
-                              highlightedTeamIds:
-                                  highlightedTeamIds,
-                            ),
-                          ),
-                        );
-                      },
-                      icon:
-                          const Icon(
-                        CupertinoIcons
-                            .calendar,
-                      ),
-                      label:
-                          const Text(
-                        'Ver calendario',
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(
-                    height: 8,
                   ),
 
                   // F04: los jugadores consultan la alineación;
@@ -1172,14 +868,11 @@ class _ManagedTeamCard
   const _ManagedTeamCard({
     required this.assignment,
     required this.repository,
-    required this.highlightedTeamIds,
   });
 
   final TeamAssignment assignment;
 
   final TeamRepository repository;
-
-  final Set<String> highlightedTeamIds;
 
   @override
   Widget build(
@@ -1373,7 +1066,7 @@ class _ManagedTeamCard
                 ],
 
                 // =================================================
-                // PARTIDO + CALENDARIO
+                // PRÓXIMO PARTIDO Y CÓMO LLEGAR
                 // =================================================
 
                 if (team != null) ...[
@@ -1382,42 +1075,6 @@ class _ManagedTeamCard
                         team.id,
                     tournamentId:
                         team.tournamentId,
-                  ),
-
-                  const SizedBox(
-                    height: 12,
-                  ),
-
-                  SizedBox(
-                    width:
-                        double.infinity,
-                    child:
-                        OutlinedButton.icon(
-                      onPressed:
-                          () {
-                        Navigator.of(
-                          context,
-                        ).push(
-                          MaterialPageRoute<void>(
-                            builder:
-                                (_) =>
-                                    TeamCalendarScreen(
-                              highlightedTeamIds:
-                                  highlightedTeamIds,
-                            ),
-                          ),
-                        );
-                      },
-                      icon:
-                          const Icon(
-                        CupertinoIcons
-                            .calendar,
-                      ),
-                      label:
-                          const Text(
-                        'Ver calendario',
-                      ),
-                    ),
                   ),
 
                   const SizedBox(

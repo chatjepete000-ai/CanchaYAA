@@ -102,7 +102,10 @@ class _HomeShellState extends State<HomeShell> {
       OverviewScreen(
         themeController: widget.themeController,
       ),
-      const TeamsScreen(),
+      TeamsScreen(
+        // Torneos es la tercera pestaña (índice 2).
+        onOpenTournaments: () => _selectTab(2),
+      ),
       const TournamentsScreen(),
       if (canManageLeague)
         const LeagueAdminScreen(),
@@ -148,17 +151,19 @@ class _HomeShellState extends State<HomeShell> {
       bottomNavigationBar: _CanchaYaBottomBar(
         selectedIndex: safeIndex,
         items: navItems,
-        onSelected: (index) {
-          if (index == safeIndex) {
-            return;
-          }
-
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
+        onSelected: _selectTab,
       ),
     );
+  }
+
+  void _selectTab(int index) {
+    if (index == _selectedIndex) {
+      return;
+    }
+
+    setState(() {
+      _selectedIndex = index;
+    });
   }
 }
 
